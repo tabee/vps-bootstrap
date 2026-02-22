@@ -202,22 +202,17 @@ bootstrap/
 - Root SSH access (will be locked to VPN after bootstrap)
 - Internet connectivity
 - Domain managed by Hetzner DNS
-- Hetzner DNS API token
+- Hetzner Cloud API token (with DNS permissions)
 
-
-### Step 1a: Get Files without git
-
-``` 
-apt update && apt install build-essential -y
-tar -xvJf vps-bootstrap.tar.xz
-cd vps-bootstrap
-```
-
-### Step 1b: Clone and Configure
+### Step 1: Clone Repository
 
 ```bash
-git clone <repo-url> /root/vps-bootstrap
-cd /root/vps-bootstrap
+# Install prerequisites
+apt update && apt install -y git make
+
+# Clone and enter directory
+git clone https://github.com/tabee/vps-bootstrap.git
+cd vps-bootstrap
 ```
 
 First run automatically creates `.env` and generates secrets:
