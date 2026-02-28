@@ -79,3 +79,9 @@ module_done() {
   local name="${1:-$BOOTSTRAP_MODULE}"
   log_step "Module $name completed successfully"
 }
+
+# Return the SSH client IP (first word of $SSH_CLIENT), or empty string
+get_ssh_client_ip() {
+  local ip="${SSH_CLIENT:-}"
+  printf '%s' "${ip%% *}"
+}

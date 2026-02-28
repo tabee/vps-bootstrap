@@ -57,6 +57,10 @@ user-lockdown: ## Create admin user and disable root SSH login
 apply: ## Run full bootstrap (requires root)
 	@sudo bash $(BOOTSTRAP_DIR)/apply.sh
 
+.PHONY: apply-on-vpn
+apply-on-vpn: ## Run full bootstrap over VPN (skips WAN SSH rule, auto ssh-lockdown)
+	@sudo bash $(BOOTSTRAP_DIR)/apply.sh --on-vpn
+
 .PHONY: dry-run
 dry-run: ## Preview changes without applying
 	@sudo bash $(BOOTSTRAP_DIR)/apply.sh --dry-run

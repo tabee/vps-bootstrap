@@ -21,6 +21,21 @@ source "${SCRIPT_DIR}/lib/logging.sh"
 
 BOOTSTRAP_MODULE="ssh-lockdown"
 
+FORCE=false
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --force|-f) FORCE=true; shift ;;
+    --help|-h)
+      echo "Usage: $0 [--force]"
+      echo "  --force  Skip confirmation prompt and VPN check (for automated use)"
+      exit 0
+      ;;
+    *) log_fatal "Unknown option: $1" ;;
+  esac
+done
+
 # Colors for emphasis
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -58,35 +73,41 @@ preflight_checks() {
     echo "Current wg0 addresses:" >&2
     ip addr show wg0 | grep inet >&2
     echo "" >&2
-    read -p "Continue anyway? This may lock you out! [y/N] " -r
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-      echo "Aborted."
-      exit 1
+    if [[ "$FORCE" != "true" ]]; then
+      read -p "Continue anyway? This may lock you out! [y/N] " -r
+      if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Aborted."
+        exit 1
+      fi
+    else
+      log_warn "Proceeding despite unexpected wg0 address (--force)"
     fi
   fi
 
   # Check if we're connected via VPN (not WAN)
-  local ssh_client_ip
-  ssh_client_ip="${SSH_CLIENT:-}"
-  ssh_client_ip="${ssh_client_ip%% *}"
-  if [[ -n "$ssh_client_ip" ]]; then
-    if [[ "$ssh_client_ip" == 10.100.0.* ]]; then
-      log_info "✅ Connected via VPN ($ssh_client_ip)"
+  # Skipped in --force mode (caller already verified this)
+  if [[ "$FORCE" != "true" ]]; then
+    local ssh_client_ip
+    ssh_client_ip="$(get_ssh_client_ip)"
+    if [[ -n "$ssh_client_ip" ]]; then
+      if [[ "$ssh_client_ip" == 10.100.0.* ]]; then
+        log_info "✅ Connected via VPN ($ssh_client_ip)"
+      else
+        echo -e "${RED}❌ ERROR: You are connected via WAN ($ssh_client_ip)!${NC}" >&2
+        echo "" >&2
+        echo "You are currently connected via the public IP, not the VPN." >&2
+        echo "If you lock down SSH now, your current session will be terminated" >&2
+        echo "and you won't be able to reconnect." >&2
+        echo "" >&2
+        echo "First, connect via VPN:" >&2
+        echo "  ssh root@10.100.0.1" >&2
+        echo "" >&2
+        echo "Then run this script again from that VPN session." >&2
+        exit 1
+      fi
     else
-      echo -e "${RED}❌ ERROR: You are connected via WAN ($ssh_client_ip)!${NC}" >&2
-      echo "" >&2
-      echo "You are currently connected via the public IP, not the VPN." >&2
-      echo "If you lock down SSH now, your current session will be terminated" >&2
-      echo "and you won't be able to reconnect." >&2
-      echo "" >&2
-      echo "First, connect via VPN:" >&2
-      echo "  ssh root@10.100.0.1" >&2
-      echo "" >&2
-      echo "Then run this script again from that VPN session." >&2
-      exit 1
+      log_warn "⚠️  Cannot determine SSH client IP (local console?)"
     fi
-  else
-    log_warn "⚠️  Cannot determine SSH client IP (local console?)"
   fi
 
   log_info "✅ Preflight checks passed"
@@ -179,21 +200,23 @@ main() {
   echo -e "${YELLOW}╚══════════════════════════════════════════════════════════════╝${NC}" >&2
   echo "" >&2
   
-  echo -e "${RED}⚠️  WARNING: This will disable SSH access via the public IP!${NC}" >&2
-  echo "" >&2
-  echo "After this, you can ONLY connect via WireGuard VPN:" >&2
-  echo "  ssh root@10.100.0.1" >&2
-  echo "" >&2
-  echo "Make sure:" >&2
-  echo "  1. Your WireGuard VPN is connected (wg-quick up wg0)" >&2
-  echo "  2. You can reach 10.100.0.1 from your client" >&2
-  echo "  3. You are currently connected via VPN, not WAN" >&2
-  echo "" >&2
+  if [[ "$FORCE" != "true" ]]; then
+    echo -e "${RED}⚠️  WARNING: This will disable SSH access via the public IP!${NC}" >&2
+    echo "" >&2
+    echo "After this, you can ONLY connect via WireGuard VPN:" >&2
+    echo "  ssh root@10.100.0.1" >&2
+    echo "" >&2
+    echo "Make sure:" >&2
+    echo "  1. Your WireGuard VPN is connected (wg-quick up wg0)" >&2
+    echo "  2. You can reach 10.100.0.1 from your client" >&2
+    echo "  3. You are currently connected via VPN, not WAN" >&2
+    echo "" >&2
 
-  read -p "Are you sure you want to proceed? [y/N] " -r
-  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "Aborted."
-    exit 0
+    read -p "Are you sure you want to proceed? [y/N] " -r
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+      echo "Aborted."
+      exit 0
+    fi
   fi
 
   preflight_checks

@@ -169,9 +169,16 @@ assert "SSH lockdown script exists" \
 assert "SSH lockdown: restricts to 10.100.0.1" \
   grep -q 'ListenAddress 10.100.0.1' "${BOOTSTRAP_DIR}/ssh-lockdown.sh"
 
+assert "SSH lockdown: supports --force flag (non-interactive)" \
+  grep -q '\-\-force' "${BOOTSTRAP_DIR}/ssh-lockdown.sh"
+
 # Firewall must allow SSH on WAN during bootstrap (rate-limited)
 assert "Firewall: bootstrap SSH on WAN (rate-limited)" \
   grep -q 'tcp dport 22.*limit rate.*bootstrap-ssh-wan' "${BOOTSTRAP_DIR}/modules/04-firewall.sh"
+
+# Firewall must support VPN-only mode (ON_VPN=true omits WAN SSH rule)
+assert "Firewall: supports ON_VPN mode (no WAN SSH)" \
+  grep -q 'ON_VPN' "${BOOTSTRAP_DIR}/modules/04-firewall.sh"
 
 # dnsmasq must bind to wg0 only
 assert "dnsmasq: interface=wg0" \
@@ -230,6 +237,7 @@ echo ""
 echo "── Makefile ──"
 assert "Makefile exists" test -f "${SCRIPT_DIR}/Makefile"
 assert "Makefile has apply target" grep -q '^apply:' "${SCRIPT_DIR}/Makefile"
+assert "Makefile has apply-on-vpn target" grep -q '^apply-on-vpn:' "${SCRIPT_DIR}/Makefile"
 assert "Makefile has dry-run target" grep -q '^dry-run:' "${SCRIPT_DIR}/Makefile"
 assert "Makefile has validate target" grep -q '^validate:' "${SCRIPT_DIR}/Makefile"
 assert "Makefile has rollback target" grep -q '^rollback:' "${SCRIPT_DIR}/Makefile"

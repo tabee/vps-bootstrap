@@ -36,6 +36,7 @@ BOOTSTRAP_MODULE="04-firewall"
 # ── Generate nftables ruleset ────────────────────────────────────────────────
 # CRITICAL: This ruleset allows SSH on WAN during bootstrap phase.
 # After VPN is verified working, run "make ssh-lockdown" to restrict SSH to VPN only.
+# When ON_VPN=true (--on-vpn mode), the WAN SSH rule is omitted entirely.
 generate_ruleset() {
   cat <<'NFT'
 #!/usr/sbin/nft -f
@@ -50,9 +51,6 @@ generate_ruleset() {
 #   2. Only UDP/51820 (WireGuard) and TCP/22 (SSH) from WAN
 #   3. VPN clients reach services ONLY through Traefik
 #   4. Docker iptables disabled — all filtering via nftables
-#
-# ⚠️  BOOTSTRAP MODE: SSH is allowed on WAN for recovery.
-#    After VPN is working, run "make ssh-lockdown" to disable WAN SSH.
 # =============================================================================
 
 flush ruleset
@@ -99,11 +97,21 @@ table inet filter {
     # Rate-limited to 25/s burst 50 to mitigate UDP amplification/DoS
     iifname $WAN_IF udp dport 51820 limit rate 25/second burst 50 packets accept
 
+NFT
+
+  # ⚠️  BOOTSTRAP MODE: Allow SSH on WAN for recovery access.
+  # Omitted in VPN-only mode (ON_VPN=true) — SSH is already locked to VPN.
+  if [[ "${ON_VPN:-false}" != "true" ]]; then
+    cat <<'NFT'
     # ⚠️  BOOTSTRAP MODE: Allow SSH on WAN for recovery access
     # This rule is removed by "make ssh-lockdown" after VPN is verified working.
     # Rate-limited to prevent brute-force attacks.
     iifname $WAN_IF tcp dport 22 limit rate 10/minute burst 5 packets accept comment "bootstrap-ssh-wan"
 
+NFT
+  fi
+
+  cat <<'NFT'
     # ── VPN rules ────────────────────────────────────────────────────────────
     # Allow SSH from VPN clients to host (10.100.0.1:22)
     iifname $VPN_IF ip saddr $VPN_NET tcp dport 22 accept
@@ -181,7 +189,11 @@ NFT
 
 # ── Install and validate ruleset ─────────────────────────────────────────────
 install_firewall() {
-  log_step "Installing nftables ruleset"
+  if [[ "${ON_VPN:-false}" == "true" ]]; then
+    log_step "Installing nftables ruleset (VPN-only mode — WAN SSH omitted)"
+  else
+    log_step "Installing nftables ruleset (bootstrap mode — WAN SSH allowed)"
+  fi
 
   local nft_conf="/etc/nftables.conf"
   local ruleset

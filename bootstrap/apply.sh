@@ -68,6 +68,7 @@ trap release_lock EXIT
 
 # ── Parse arguments ─────────────────────────────────────────────────────────
 DRY_RUN="${DRY_RUN:-false}"
+ON_VPN="${ON_VPN:-false}"
 SINGLE_MODULE=""
 START_FROM=""
 SKIP_PREFLIGHT=false
@@ -78,6 +79,11 @@ while [[ $# -gt 0 ]]; do
     --dry-run|-n)
       DRY_RUN=true
       export DRY_RUN
+      shift
+      ;;
+    --on-vpn)
+      ON_VPN=true
+      export ON_VPN
       shift
       ;;
     --module|-m)
@@ -101,6 +107,7 @@ while [[ $# -gt 0 ]]; do
       echo ""
       echo "Options:"
       echo "  --dry-run, -n           Show what would be done without making changes"
+      echo "  --on-vpn                VPN-connected mode: omit WAN SSH rule, auto-run ssh-lockdown"
       echo "  --module, -m <NUM>      Run only the specified module (e.g., 04)"
       echo "  --from, -f <NUM>        Start from the specified module (e.g., 05)"
       echo "  --skip-preflight        Skip preflight checks"
@@ -143,6 +150,26 @@ echo "" >&2
 if [[ "$DRY_RUN" == "true" ]]; then
   log_warn "DRY-RUN MODE — no changes will be made"
   echo "" >&2
+fi
+
+if [[ "$ON_VPN" == "true" ]]; then
+  log_warn "VPN-CONNECTED MODE — WAN SSH rule omitted, ssh-lockdown runs automatically"
+  echo "" >&2
+fi
+
+# ── VPN connection verification (--on-vpn mode) ──────────────────────────────
+if [[ "$ON_VPN" == "true" ]]; then
+  log_step "Verifying VPN connection..."
+  local_ssh_client_ip="$(get_ssh_client_ip)"
+  if [[ -n "$local_ssh_client_ip" ]]; then
+    if [[ "$local_ssh_client_ip" == 10.100.0.* ]]; then
+      log_info "✅ Connected via VPN ($local_ssh_client_ip)"
+    else
+      log_fatal "Not connected via VPN (client IP: $local_ssh_client_ip) — connect via VPN first (ssh root@10.100.0.1)"
+    fi
+  else
+    log_warn "⚠️  Cannot determine SSH client IP (local console?) — proceeding in VPN mode"
+  fi
 fi
 
 # ── Environment initialization (first-run: creates .env, generates secrets) ──
@@ -241,6 +268,17 @@ else
   fi
 fi
 
+# ── Auto ssh-lockdown in VPN-connected mode ──────────────────────────────────
+if [[ "$ON_VPN" == "true" && "$DRY_RUN" != "true" ]]; then
+  echo "" >&2
+  log_step "Running SSH lockdown (--on-vpn mode)..."
+  if bash "${SCRIPT_DIR}/ssh-lockdown.sh" --force; then
+    log_info "✅ SSH locked down to VPN only"
+  else
+    log_warn "⚠️  SSH lockdown failed — run 'make ssh-lockdown' manually"
+  fi
+fi
+
 # ── Final summary ───────────────────────────────────────────────────────────
 echo "" >&2
 log_step "╔══════════════════════════════════════════════════════════════╗"
@@ -251,6 +289,21 @@ echo "" >&2
 if [[ "$DRY_RUN" == "true" ]]; then
   log_info "Dry-run complete. No changes were made."
   log_info "Run without --dry-run to apply changes."
+elif [[ "$ON_VPN" == "true" ]]; then
+  log_info "System bootstrapped successfully (VPN-connected mode)."
+  log_info "Backup stored at: /var/backups/bootstrap/${BACKUP_TIMESTAMP}/"
+  echo "" >&2
+  log_info "✅ SSH is restricted to VPN only (10.100.0.1)"
+  log_info "✅ WAN SSH rule was NOT added to firewall"
+  echo "" >&2
+  log_info "Next steps:"
+  log_info "  1. Verify final state:"
+  log_info "       make validate"
+  log_info "       make status"
+  log_info ""
+  log_info "  2. Test services (via VPN):"
+  log_info "       curl -sk https://whoami.\${VPN_DOMAIN}"
+  log_info "       curl -sk https://git.\${VPN_DOMAIN}"
 else
   log_info "System bootstrapped successfully."
   log_info "Backup stored at: /var/backups/bootstrap/${BACKUP_TIMESTAMP}/"
