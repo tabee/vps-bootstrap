@@ -27,6 +27,38 @@ make ssh-lockdown
 make user-lockdown
 ```
 
+## Optional Modules
+
+### n8n workflow automation (module `10-n8n`)
+
+This module deploys **n8n + PostgreSQL** behind Traefik with:
+- **Let's Encrypt** TLS (DNS-01 via Hetzner)
+- **VPN-only** access (nftables + Traefik `ipAllowList`)
+- **Basic Auth** on the n8n UI
+- Domain: `https://8n8.<VPN_DOMAIN>/`
+
+#### Enable
+1) Ensure the base stack is already applied (modules 01–09) and you are connected via VPN.
+2) Set your OpenAI key (optional, only needed for workflows that call OpenAI):
+
+```bash
+sudo sed -i 's|^OPENAI_API_KEY=.*|OPENAI_API_KEY=__PUT_YOUR_KEY_HERE__|' /root/vps-bootstrap/bootstrap/.env
+sudo chmod 0600 /root/vps-bootstrap/bootstrap/.env
+```
+
+3) Run the module:
+
+```bash
+cd /root/vps-bootstrap
+sudo bash bootstrap/apply.sh --module 10-n8n
+```
+
+#### Access
+From a VPN client (DNS via `10.100.0.1`):
+- `https://8n8.<VPN_DOMAIN>/`
+
+Credentials are stored in `/root/vps-bootstrap/bootstrap/.env` (variables `N8N_BASIC_AUTH_USER` / `N8N_BASIC_AUTH_PASSWORD`).
+
 ## Architecture Overview
 
 ```
@@ -541,10 +573,11 @@ Snapshots are stored in `snapshot/<timestamp>/` and include:
 
 ### Adding a New Module
 1. Create `bootstrap/modules/XX-name.sh` following existing patterns
-2. Add to `MODULES` array in `bootstrap/apply.sh`
-3. Add Make target in `Makefile`
-4. Add tests in `tests/smoke.sh`
-5. Document in this README
+2. Decide if it is **mandatory** or **optional**:
+   - **Mandatory**: add it to the `MODULES` array in `bootstrap/apply.sh`
+   - **Optional**: keep it out of `MODULES` and run it explicitly with `--module XX-name`
+3. Add tests in `tests/smoke.sh`
+4. Document in this README
 
 ## Project Structure
 
@@ -570,7 +603,7 @@ vps-bootstrap/
 │   │   ├── logging.sh         # Logging functions
 │   │   ├── backup.sh          # Backup utilities
 │   │   └── validate.sh        # Validation gates
-│   └── modules/               # Bootstrap modules (01-09)
+│   └── modules/               # Bootstrap modules (01-10)
 │       ├── 01-system.sh       # Base system, packages, sysctl
 │       ├── 02-network.sh      # WireGuard VPN, systemd-networkd
 │       ├── 03-dns.sh          # dnsmasq for VPN DNS
@@ -580,6 +613,7 @@ vps-bootstrap/
 │       ├── 07-gitea.sh        # Git server + PostgreSQL
 │       ├── 08-whoami.sh       # Diagnostic service
 │       ├── 09-security.sh     # Fail2ban, auditd, auto-updates
+│       ├── 10-n8n.sh          # (Optional) n8n workflow automation
 │       └── snapshot.sh        # System snapshot for debugging
 ├── snapshot/                  # Snapshot output directory
 └── tests/

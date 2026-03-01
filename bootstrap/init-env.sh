@@ -142,10 +142,15 @@ _generate_secrets() {
   cli_pub="$(printf '%s' "$cli_priv" | wg pubkey)"
 
   # Application secrets
-  local db_pass gitea_secret gitea_token
+  local db_pass gitea_secret gitea_token n8n_db_pass n8n_enc n8n_basic_pass
   db_pass="$(openssl rand -base64 32 | tr -d '\n')"
   gitea_secret="$(openssl rand -base64 48 | tr -d '\n')"
   gitea_token="$(openssl rand -base64 48 | tr -d '\n')"
+
+  # Optional modules: n8n
+  n8n_db_pass="$(openssl rand -base64 32 | tr -d '\n')"
+  n8n_enc="$(openssl rand -base64 48 | tr -d '\n')"
+  n8n_basic_pass="$(openssl rand -base64 24 | tr -d '\n')"
 
   # Inject into .env (preserves HETZNER_API_TOKEN and ACME_EMAIL untouched)
   _set_var "WG_PRIVATE_KEY"       "$srv_priv"
@@ -155,12 +160,22 @@ _generate_secrets() {
   _set_var "GITEA_SECRET_KEY"     "$gitea_secret"
   _set_var "GITEA_INTERNAL_TOKEN" "$gitea_token"
 
+  # Optional modules: n8n
+  _set_var "N8N_DB_PASSWORD"        "$n8n_db_pass"
+  _set_var "N8N_ENCRYPTION_KEY"     "$n8n_enc"
+  _set_var "N8N_BASIC_AUTH_USER"    "admin"
+  _set_var "N8N_BASIC_AUTH_PASSWORD" "$n8n_basic_pass"
+
   log_info "✅ WG_PRIVATE_KEY       (server private key)"
   log_info "✅ WG_CLIENT_PRIVKEY    (client private key → wg0-client.conf)"
   log_info "✅ WG_PEER_PUBKEY       (client public key)"
   log_info "✅ DB_PASSWORD"
   log_info "✅ GITEA_SECRET_KEY"
   log_info "✅ GITEA_INTERNAL_TOKEN"
+  log_info "✅ N8N_DB_PASSWORD"
+  log_info "✅ N8N_ENCRYPTION_KEY"
+  log_info "✅ N8N_BASIC_AUTH_USER"
+  log_info "✅ N8N_BASIC_AUTH_PASSWORD"
 
   # Detect server IP and write client config
   log_info "Detecting server public IP..."
@@ -258,7 +273,51 @@ main() {
     _generate_secrets
     log_info "✅ Auto-generated secrets replaced"
   else
-    log_info "✅ .env initialized — all secrets present"
+    log_info "✅ .env initialized — all core secrets present"
+
+    # ── Optional module secrets (non-disruptive) ─────────────────────────
+    # Add/repair optional secrets WITHOUT rotating WireGuard keys or core secrets.
+    # This keeps upgrades safe when new modules are added over time.
+    local opt_changed=false
+
+    if [[ -z "${N8N_DB_PASSWORD:-}" || "${N8N_DB_PASSWORD:-}" == *"__"* ]]; then
+      require_root
+      local v
+      v="$(openssl rand -base64 32 | tr -d '\n')"
+      _set_var "N8N_DB_PASSWORD" "$v"
+      opt_changed=true
+      log_info "✅ N8N_DB_PASSWORD generated"
+    fi
+
+    if [[ -z "${N8N_ENCRYPTION_KEY:-}" || "${N8N_ENCRYPTION_KEY:-}" == *"__"* ]]; then
+      require_root
+      local v
+      v="$(openssl rand -base64 48 | tr -d '\n')"
+      _set_var "N8N_ENCRYPTION_KEY" "$v"
+      opt_changed=true
+      log_info "✅ N8N_ENCRYPTION_KEY generated"
+    fi
+
+    if [[ -z "${N8N_BASIC_AUTH_USER:-}" || "${N8N_BASIC_AUTH_USER:-}" == *"__"* ]]; then
+      require_root
+      _set_var "N8N_BASIC_AUTH_USER" "admin"
+      opt_changed=true
+      log_info "✅ N8N_BASIC_AUTH_USER set to 'admin'"
+    fi
+
+    if [[ -z "${N8N_BASIC_AUTH_PASSWORD:-}" || "${N8N_BASIC_AUTH_PASSWORD:-}" == *"__"* ]]; then
+      require_root
+      local v
+      v="$(openssl rand -base64 24 | tr -d '\n')"
+      _set_var "N8N_BASIC_AUTH_PASSWORD" "$v"
+      opt_changed=true
+      log_info "✅ N8N_BASIC_AUTH_PASSWORD generated"
+    fi
+
+    if [[ "$opt_changed" == "true" ]]; then
+      chmod 0600 "$ENV_FILE" 2>/dev/null || true
+      log_info "✅ Optional module secrets updated in .env"
+    fi
   fi
 
   # ── Ensure wg0-client.conf exists ────────────────────────────────────────

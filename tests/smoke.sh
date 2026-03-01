@@ -85,6 +85,7 @@ assert_file_exists "modules/06-traefik.sh"
 assert_file_exists "modules/07-gitea.sh"
 assert_file_exists "modules/08-whoami.sh"
 assert_file_exists "modules/09-security.sh"
+assert_file_exists "modules/10-n8n.sh"
 echo ""
 
 # ── 2. Syntax tests ─────────────────────────────────────────────────────────
@@ -95,7 +96,7 @@ for script in apply.sh preflight.sh rollback.sh \
               modules/03-dns.sh modules/04-firewall.sh \
               modules/05-docker.sh modules/06-traefik.sh \
               modules/07-gitea.sh modules/08-whoami.sh \
-              modules/09-security.sh; do
+              modules/09-security.sh modules/10-n8n.sh; do
   assert_executable "$script"
 done
 echo ""
@@ -106,21 +107,22 @@ for script in apply.sh preflight.sh \
               modules/01-system.sh modules/02-network.sh \
               modules/03-dns.sh modules/04-firewall.sh \
               modules/05-docker.sh modules/06-traefik.sh \
-              modules/07-gitea.sh modules/08-whoami.sh; do
+              modules/07-gitea.sh modules/08-whoami.sh \
+              modules/10-n8n.sh; do
   assert_no_openclaw "$script"
 done
 echo ""
 
 # ── 4. No published ports in compose templates ──────────────────────────────
 echo "── No Published Ports ──"
-for module in modules/06-traefik.sh modules/07-gitea.sh modules/08-whoami.sh; do
+for module in modules/06-traefik.sh modules/07-gitea.sh modules/08-whoami.sh modules/10-n8n.sh; do
   assert_no_ports_directive "$module"
 done
 echo ""
 
 # ── 5. No hardcoded secrets ─────────────────────────────────────────────────
 echo "── No Hardcoded Secrets ──"
-for script in modules/02-network.sh modules/06-traefik.sh modules/07-gitea.sh; do
+for script in modules/02-network.sh modules/06-traefik.sh modules/07-gitea.sh modules/10-n8n.sh; do
   assert_no_hardcoded_secrets "$script"
 done
 assert_no_hardcoded_secrets ".env.example"
@@ -202,7 +204,7 @@ for module in modules/01-system.sh modules/02-network.sh \
               modules/03-dns.sh modules/04-firewall.sh \
               modules/05-docker.sh modules/06-traefik.sh \
               modules/07-gitea.sh modules/08-whoami.sh \
-              modules/09-security.sh; do
+              modules/09-security.sh modules/10-n8n.sh; do
   assert "Uses file_matches check: $module" \
     grep -q 'file_matches' "${BOOTSTRAP_DIR}/$module"
 done
@@ -218,6 +220,9 @@ assert ".env.example has HETZNER_API_TOKEN (not placeholder, must be filled manu
 
 assert ".env.example has DB_PASSWORD placeholder" \
   grep -q '__DB_PASSWORD__' "${BOOTSTRAP_DIR}/.env.example"
+
+assert ".env.example has N8N_ENCRYPTION_KEY placeholder" \
+  grep -q '__N8N_ENCRYPTION_KEY__' "${BOOTSTRAP_DIR}/.env.example"
 echo ""
 
 # ── 9. .gitignore ───────────────────────────────────────────────────────────
