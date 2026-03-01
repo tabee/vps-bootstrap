@@ -227,12 +227,13 @@ patch_traefik_routes() {
 
   # IMPORTANT: This heredoc is single-quoted so bash does NOT interpret backticks
   # in the Traefik Host(`...`) rule.
-  VPN_DOMAIN="$VPN_DOMAIN" python3 - <<'PY'
+  VPN_DOMAIN="$VPN_DOMAIN" TRAEFIK_DYNAMIC="$TRAEFIK_DYNAMIC" python3 - <<'PY'
 from pathlib import Path
 import os
 
 vpn_domain = os.environ["VPN_DOMAIN"]
-p = Path("${TRAEFIK_DYNAMIC}")
+path = os.environ["TRAEFIK_DYNAMIC"]
+p = Path(path)
 text = p.read_text(encoding="utf-8")
 
 router_snip = f"""
