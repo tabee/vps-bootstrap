@@ -215,6 +215,19 @@ tcp:
       loadBalancer:
         servers:
           - address: "10.20.0.30:2222"
+
+# ── TLS: wildcard certificate ────────────────────────────────────────────────
+# Request a single *.${VPN_DOMAIN} wildcard cert via DNS-01 (Hetzner).
+# This covers ALL subdomains (git, whoami, 8n8, ...) with one cert.
+tls:
+  stores:
+    default:
+      defaultGeneratedCert:
+        resolver: le
+        domain:
+          main: "*.${VPN_DOMAIN}"
+          sans:
+            - "${VPN_DOMAIN}"
 YAML
 )"
 
