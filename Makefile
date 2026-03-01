@@ -115,6 +115,10 @@ module-08: ## Run module 08-whoami only
 module-09: ## Run module 09-security only
 	@sudo bash $(BOOTSTRAP_DIR)/apply.sh --module 09-security --skip-preflight --skip-validation
 
+.PHONY: 8n8
+8n8: ## (Optional) Deploy n8n behind Traefik (VPN-only) at https://8n8.$(VPN_DOMAIN)/
+	@sudo bash $(BOOTSTRAP_DIR)/apply.sh --module 10-n8n
+
 # ── Backup targets ───────────────────────────────────────────────────────────
 
 .PHONY: backup-data
