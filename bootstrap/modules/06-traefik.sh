@@ -112,6 +112,10 @@ certificatesResolvers:
       storage: /letsencrypt/acme.json
       dnsChallenge:
         provider: hetzner
+        # Wait 60s after setting TXT record before asking Let's Encrypt to validate.
+        # Hetzner DNS propagation can take 30-60s — without this delay,
+        # secondary validators see stale/wrong TXT records → 403 Unauthorized.
+        delayBeforeCheck: 60
         resolvers:
           - "1.1.1.1:53"
           - "9.9.9.9:53"
