@@ -225,8 +225,13 @@ patch_traefik_routes() {
   #   - service `8n8-svc` under http.services
   # right next to the existing git-web entries.
 
-  python3 - <<PY
+  # IMPORTANT: This heredoc is single-quoted so bash does NOT interpret backticks
+  # in the Traefik Host(`...`) rule.
+  VPN_DOMAIN="$VPN_DOMAIN" python3 - <<'PY'
 from pathlib import Path
+import os
+
+vpn_domain = os.environ["VPN_DOMAIN"]
 p = Path("${TRAEFIK_DYNAMIC}")
 text = p.read_text(encoding="utf-8")
 
@@ -235,7 +240,7 @@ router_snip = f"""
     # n8n web UI
     8n8:
       entryPoints: [\"websecure\"]
-      rule: \"Host(`8n8.${VPN_DOMAIN}`)\"
+      rule: \"Host(`8n8.{vpn_domain}`)\"
       middlewares: [\"vpn-only\"]
       service: 8n8-svc
       tls:
@@ -255,17 +260,14 @@ if "\n    8n8:\n" in text or "\n    8n8-svc:\n" in text:
     p.write_text(text, encoding="utf-8")
     raise SystemExit(0)
 
-# Insert router before the http.services: section
 needle_services = "\n  services:\n"
 if needle_services not in text:
     raise SystemExit("Could not find 'http.services' section in Traefik dynamic.yml")
 
 text = text.replace(needle_services, router_snip + needle_services, 1)
 
-# Insert service before the tcp: section marker
 needle_tcp = "\n# ── TCP routers"
 if needle_tcp not in text:
-    # fallback: insert before 'tcp:'
     needle_tcp = "\ntcp:\n"
     if needle_tcp not in text:
         raise SystemExit("Could not find tcp section in Traefik dynamic.yml")
