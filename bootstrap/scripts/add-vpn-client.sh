@@ -114,7 +114,11 @@ else
   echo "⚠️  Warning: Peer not showing up in 'wg show'. Might need full restart or time to sync."
 fi
 
-# 6. Generate Client Config
+# 6. Generate Client Config & Save to File
+CLIENT_CONF_DIR="/root/wireguard-clients"
+mkdir -p "$CLIENT_CONF_DIR"
+CLIENT_CONF_FILE="${CLIENT_CONF_DIR}/${CLIENT_NAME}.conf"
+
 CLIENT_CONF_CONTENT="[Interface]
 PrivateKey = ${CLIENT_PRIVKEY}
 Address = ${CLIENT_IP}/24
@@ -128,9 +132,14 @@ AllowedIPs = 0.0.0.0/0, ::/0
 PersistentKeepalive = 25
 "
 
+# Save to file
+echo "$CLIENT_CONF_CONTENT" > "$CLIENT_CONF_FILE"
+chmod 600 "$CLIENT_CONF_FILE"
+
 echo ""
 echo "=================================================================="
 echo "   WireGuard Config for: ${CLIENT_NAME} (${CLIENT_IP})"
+echo "   Saved to: ${CLIENT_CONF_FILE}"
 echo "=================================================================="
 echo ""
 echo "$CLIENT_CONF_CONTENT"
@@ -138,6 +147,7 @@ echo ""
 echo "=================================================================="
 echo "   SCAN QR CODE BELOW (Mobile)"
 echo "=================================================================="
+
 echo ""
 
 qrencode -t ANSIUTF8 <<< "$CLIENT_CONF_CONTENT"
