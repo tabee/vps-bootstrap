@@ -88,6 +88,7 @@ echo "🔹 Keys generated for $CLIENT_NAME"
 
 cat >> "$NETDEV_FILE" <<EOF
 
+
 [WireGuardPeer]
 # Client: ${CLIENT_NAME}
 PublicKey=${CLIENT_PUBKEY}
