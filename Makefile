@@ -19,6 +19,10 @@ BOOTSTRAP_DIR := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))/boot
 
 # ── Main targets ─────────────────────────────────────────────────────────────
 
+.PHONY: add-vpn-client
+add-vpn-client: ## Add a new WireGuard client (usage: make add-vpn-client CLIENT=iphone)
+	@sudo bash $(BOOTSTRAP_DIR)/scripts/add-vpn-client.sh $(CLIENT)
+
 .PHONY: help
 help: ## Show this help message
 	@echo ""
