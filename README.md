@@ -101,6 +101,34 @@ Dann auf dem OpenClaw-VPS die WireGuard-Config installieren und SSH-Key für `ad
 
 ---
 
+### 📋 TODO: SSH-CLI für alle Services (Zero-Credential-Agents)
+
+**Ziel:** KI-Agenten sollen *niemals* API-Tokens oder Credentials sehen.
+
+**Aktueller Stand:**
+
+| Service | Tool | LLM sieht Credentials? | Status |
+|---------|------|------------------------|--------|
+| Google Workspace | `gog` (gogcli) | ❌ Nein | ✅ Fertig |
+| Gitea | `tea` (offiziell) | ❌ Nein | 🔧 TODO |
+| n8n | Built-in CLI | ❌ Nein | 🔧 TODO |
+| PostgreSQL | `psql --json` (PG16+) | ❌ Nein | 🔧 TODO |
+
+**Geplante Umsetzung mit etablierten Tools:**
+
+```bash
+# Gitea: tea (offizielle CLI von Gitea)
+# Token wird einmalig auf VPS hinterlegt, nicht im Agent-Prompt
+ssh admin@10.100.0.1 "tea issues list myorg/repo --output json"
+ssh admin@10.100.0.1 "tea pulls create --title 'Fix' --output json"
+
+# n8n: Built-in CLI (bereits in n8n enthalten)
+ssh admin@10.100.0.1 "n8n-cli list:workflow"
+ssh admin@10.100.0.1 "n8n-cli execute --id 5"
+
+# PostgreSQL: Natives JSON seit PG16
+ssh admin@10.100.0.1 "psql -d gitea --json -c 'SELECT * FROM issue LIMIT 10'"
+
 ## Voraussetzungen
 
 ### 1. Server erstellen (5 Min)
