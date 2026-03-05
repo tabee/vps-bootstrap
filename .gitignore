@@ -9,6 +9,12 @@ bootstrap/wg0-client.conf
 *.pem
 *.key
 
+# ── Terraform ───────────────────────────────────────────────────────────────
+.terraform/
+terraform.tfstate
+terraform.tfstate.*
+*.tfvars
+
 # ── Snapshots (generated, may contain sensitive data) ───────────────────────
 snapshot/*/
 

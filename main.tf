@@ -4,6 +4,32 @@ provider "hcloud" {
 
 locals {
   ssh_host_effective = var.create_hcloud_server ? hcloud_server.bootstrap[0].ipv4_address : var.ssh_host
+
+  env_render = templatefile("${path.module}/templates/bootstrap.env.tftpl", {
+    hetzner_api_token = var.hetzner_api_token
+    vpn_domain        = var.vpn_domain
+    vpn_hostname      = var.vpn_hostname
+    acme_email        = var.acme_email
+    openai_api_key    = var.openai_api_key
+  })
+
+  bootstrap_args = compact([
+    var.dry_run ? "--dry-run" : "",
+    var.module != "" ? "--module ${var.module}" : "",
+    var.from != "" ? "--from ${var.from}" : "",
+    var.skip_preflight ? "--skip-preflight" : "",
+    var.skip_validation ? "--skip-validation" : "",
+  ])
+
+  bootstrap_command = "sudo bash ${var.repo_path}/bootstrap/apply.sh ${join(" ", local.bootstrap_args)}"
+
+  cloud_init = templatefile("${path.module}/templates/cloud-init.yaml.tftpl", {
+    git_repo_url      = var.git_repo_url
+    git_ref           = var.git_ref
+    repo_path         = var.repo_path
+    env_render        = local.env_render
+    bootstrap_command = local.bootstrap_command
+  })
 }
 
 resource "hcloud_ssh_key" "bootstrap" {
@@ -38,11 +64,14 @@ resource "hcloud_server" "bootstrap" {
   location    = var.hcloud_location
   image       = var.hcloud_image
 
-  ssh_keys    = [hcloud_ssh_key.bootstrap[0].id]
+  ssh_keys     = [hcloud_ssh_key.bootstrap[0].id]
   firewall_ids = [hcloud_firewall.bootstrap[0].id]
+
+  user_data = local.cloud_init
 }
 
 module "bootstrap" {
+  count  = var.create_hcloud_server ? 0 : 1
   source = "./modules/bootstrap"
 
   ssh_host              = local.ssh_host_effective

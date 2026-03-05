@@ -1,0 +1,25 @@
+#cloud-config
+package_update: true
+package_upgrade: false
+packages:
+  - git
+  - make
+  - curl
+
+write_files:
+  - path: /root/bootstrap.env
+    permissions: '0600'
+    content: |
+${indent(6, env_render)}
+
+runcmd:
+  - [bash, -lc, "set -euo pipefail"]
+  - [bash, -lc, "mkdir -p ${repo_path}"]
+  - [bash, -lc, "if [ ! -d ${repo_path}/.git ]; then git clone ${git_repo_url} ${repo_path}; fi"]
+  - [bash, -lc, "cd ${repo_path} && git fetch --all --prune --tags"]
+  - [bash, -lc, "cd ${repo_path} && (git checkout ${git_ref} || git checkout -b ${git_ref} origin/${git_ref})"]
+  - [bash, -lc, "cd ${repo_path} && git reset --hard origin/${git_ref}"]
+  - [bash, -lc, "mv /root/bootstrap.env ${repo_path}/bootstrap/.env"]
+  - [bash, -lc, "chmod 0600 ${repo_path}/bootstrap/.env"]
+  - [bash, -lc, "sudo bash ${repo_path}/bootstrap/init-env.sh"]
+  - [bash, -lc, "${bootstrap_command}"]

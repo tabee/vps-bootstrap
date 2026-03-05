@@ -3,7 +3,7 @@ output "repo_path" {
 }
 
 output "bootstrap_command" {
-  value = module.bootstrap.bootstrap_command
+  value = var.create_hcloud_server ? local.bootstrap_command : module.bootstrap[0].bootstrap_command
 }
 
 output "server_ipv4" {
