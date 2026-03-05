@@ -78,6 +78,12 @@ variable "enable_whoami" {
   default     = true
 }
 
+variable "enable_gogcli" {
+  description = "Google Workspace CLI API? (gog.domain.com)"
+  type        = bool
+  default     = false
+}
+
 # ═══════════════════════════════════════════════════════════════════════════
 # VPN CLIENTS
 # ═══════════════════════════════════════════════════════════════════════════

@@ -39,6 +39,10 @@ enable_n8n = false
 # Test service (whoami.example.com)
 enable_whoami = true
 
+# Google Workspace CLI API (gog.example.com)
+# Requires Google OAuth setup after deployment
+enable_gogcli = false
+
 # ═══════════════════════════════════════════════════════════════════════════
 # OPTIONAL - VPN Clients
 # ═══════════════════════════════════════════════════════════════════════════

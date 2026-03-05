@@ -43,6 +43,12 @@ output "credentials" {
       db_password    = random_password.n8n_db[0].result
       encryption_key = random_password.n8n_encryption[0].result
     } : null
+
+    gogcli = var.enable_gogcli ? {
+      access   = "ssh ${var.admin_user}@10.100.0.1 'gog <command>'"
+      config   = "/opt/gogcli"
+      note     = "Requires Google OAuth setup - see README"
+    } : null
   }
 }
 
@@ -56,6 +62,7 @@ output "services" {
     gitea  = var.enable_gitea ? "https://git.${var.domain}" : null
     n8n    = var.enable_n8n ? "https://n8n.${var.domain}" : null
     whoami = var.enable_whoami ? "https://whoami.${var.domain}" : null
+    gogcli = var.enable_gogcli ? "ssh ${var.admin_user}@10.100.0.1 'gog <command>'" : null
   }
 }
 

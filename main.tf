@@ -5,7 +5,7 @@
 #   - WireGuard VPN (only public-facing service after hardening)
 #   - Docker with isolated networking
 #   - Traefik reverse proxy with Let's Encrypt via Hetzner DNS
-#   - Optional services: Gitea, n8n, whoami
+#   - Optional services: Gitea, n8n, whoami, gogcli
 #
 # Usage:
 #   terraform init
@@ -76,8 +76,7 @@ ADMIN_USER="${var.admin_user}"
 # ── Service Flags ────────────────────────────────────────────────────────────
 ENABLE_GITEA="${var.enable_gitea}"
 ENABLE_N8N="${var.enable_n8n}"
-ENABLE_WHOAMI="${var.enable_whoami}"
-
+ENABLE_WHOAMI="${var.enable_whoami}"ENABLE_GOGCLI="${var.enable_gogcli}"
 # ── Service Secrets ──────────────────────────────────────────────────────────
 %{if var.enable_gitea~}
 GITEA_DB_PASSWORD="${random_password.gitea_db[0].result}"

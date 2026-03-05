@@ -5,7 +5,7 @@
 Erstellt einen gehärteten Debian 12 Server mit:
 - 🔐 WireGuard VPN (einziger Zugang nach Installation)
 - 🌐 Automatische HTTPS-Zertifikate (Let's Encrypt via Hetzner DNS)
-- 🐳 Docker-basierte Services (optional: Gitea, n8n)
+- 🐳 Docker-basierte Services (optional: Gitea, n8n, gogcli)
 - 🛡️ Firewall, Fail2ban, automatische Sicherheitsupdates
 
 ---
@@ -81,6 +81,7 @@ acme_email           = "du@example.com"       # E-Mail für Let's Encrypt
 enable_gitea  = false  # Git-Server unter git.example.com
 enable_n8n    = false  # Workflow-Automation unter n8n.example.com
 enable_whoami = true   # Test-Service unter whoami.example.com
+enable_gogcli = false  # Google Workspace CLI (via SSH)
 
 # OPTIONAL - VPN-Clients (default: ["admin"])
 vpn_clients = ["admin", "iphone", "laptop"]
@@ -141,6 +142,7 @@ curl -k https://whoami.example.com
 | `enable_gitea` | | `false` | Git-Server (git.domain.com) |
 | `enable_n8n` | | `false` | Workflow-Tool (n8n.domain.com) |
 | `enable_whoami` | | `true` | Test-Service (whoami.domain.com) |
+| `enable_gogcli` | | `false` | Google Workspace CLI (via SSH) |
 | `vpn_clients` | | `["admin"]` | Liste der VPN-Clients |
 | `admin_user` | | `"admin"` | SSH-Benutzername nach Härtung |
 
@@ -175,6 +177,62 @@ terraform apply  # Client wird automatisch gelöscht
 ```bash
 ssh admin@10.100.0.1 'sudo /opt/vps/bootstrap/scripts/vpn-client.sh list'
 ```
+
+---
+
+## gogcli (Google Workspace CLI)
+
+Mit `enable_gogcli = true` wird [gogcli](https://gogcli.sh) installiert - ein CLI für Gmail, Calendar, Drive, Sheets etc.
+
+### Sicherheitsmodell
+
+**Kein HTTP-Endpunkt.** Zugriff ausschließlich per SSH:
+
+```bash
+# Von deinem lokalen Rechner (via VPN):
+ssh admin@10.100.0.1 "gog gmail search 'is:unread' --json"
+
+# Von anderem VPS (z.B. OpenClaw):
+ssh admin@10.100.0.1 "gog drive list --json"
+```
+
+### Einrichtung
+
+1. **Google OAuth Credentials erstellen:**
+   - [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+   - OAuth 2.0 Client ID → "Desktop app"
+   - JSON-Datei herunterladen
+
+2. **Credentials auf den Server kopieren:**
+   ```bash
+   scp client_secret_*.json admin@10.100.0.1:/opt/gogcli/
+   ```
+
+3. **Authorisierung durchführen (einmalig):**
+   ```bash
+   ssh admin@10.100.0.1
+   gog auth credentials /opt/gogcli/client_secret_*.json
+   gog auth add deine@gmail.com
+   ```
+
+4. **Testen:**
+   ```bash
+   gog gmail labels list
+   gog drive list
+   gog calendar events --days 7
+   ```
+
+### Verfügbare Services
+
+| Service | Beispiel-Befehl |
+|---------|----------------|
+| `gmail` | `gog gmail search 'is:unread' --max 10` |
+| `drive` | `gog drive list --json` |
+| `calendar` | `gog calendar events --days 7` |
+| `sheets` | `gog sheets get SPREADSHEET_ID` |
+| `docs` | `gog docs list` |
+| `contacts` | `gog contacts list` |
+| `tasks` | `gog tasks list` |
 
 ---
 
@@ -260,6 +318,7 @@ Dieser Server ist nach Installation maximal gehärtet:
 | (optional) Gitea | Git-Server | 2222 (SSH, nur VPN) |
 | (optional) n8n | Workflow-Automation | - |
 | (optional) whoami | Test-Service | - |
+| (optional) gogcli | Google Workspace CLI | via SSH |
 
 ---
 
@@ -282,6 +341,13 @@ Dieser Server ist nach Installation maximal gehärtet:
 │  │    ├── Gitea (optional)                                │ │
 │  │    ├── n8n (optional)                                  │ │
 │  │    └── whoami (optional)                               │ │
+│  └────────────────────────────────────────────────────────┘ │
+│       │                                                     │
+│       │ SSH                                                 │
+│       ▼                                                     │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │  gogcli (optional, kein Docker!)                        │ │
+│  │    └── /usr/local/bin/gog → Gmail, Drive, Calendar...  │ │
 │  └────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────┘
 ```
