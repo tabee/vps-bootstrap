@@ -1,6 +1,74 @@
 variable "ssh_host" {
-  description = "VPS public IP or DNS name"
+  description = "VPS public IP or DNS name (ignored if create_hcloud_server=true)"
   type        = string
+  default     = ""
+  validation {
+    condition     = var.create_hcloud_server || length(var.ssh_host) > 0
+    error_message = "ssh_host is required when create_hcloud_server=false."
+  }
+}
+
+variable "create_hcloud_server" {
+  description = "Create a Hetzner Cloud server automatically"
+  type        = bool
+  default     = false
+}
+
+variable "hcloud_token" {
+  description = "Hetzner Cloud API token (server provisioning)"
+  type        = string
+  default     = ""
+  sensitive   = true
+  validation {
+    condition     = !var.create_hcloud_server || length(var.hcloud_token) > 0
+    error_message = "hcloud_token is required when create_hcloud_server=true."
+  }
+}
+
+variable "hcloud_server_name" {
+  description = "Server name"
+  type        = string
+  default     = "vps"
+}
+
+variable "hcloud_server_type" {
+  description = "Server type (e.g., cx22)"
+  type        = string
+  default     = "cx22"
+}
+
+variable "hcloud_location" {
+  description = "Server location (e.g., nbg1, fsn1, hel1)"
+  type        = string
+  default     = "nbg1"
+}
+
+variable "hcloud_image" {
+  description = "OS image (e.g., debian-12)"
+  type        = string
+  default     = "debian-12"
+}
+
+variable "hcloud_ssh_key_name" {
+  description = "Name for the SSH key in Hetzner Cloud"
+  type        = string
+  default     = "bootstrap-key"
+}
+
+variable "hcloud_ssh_public_key_path" {
+  description = "Path to SSH public key for server access"
+  type        = string
+  default     = ""
+}
+
+variable "hcloud_ssh_public_key" {
+  description = "SSH public key content (overrides hcloud_ssh_public_key_path if set)"
+  type        = string
+  default     = ""
+  validation {
+    condition     = !var.create_hcloud_server || length(var.hcloud_ssh_public_key) > 0 || length(var.hcloud_ssh_public_key_path) > 0
+    error_message = "Provide hcloud_ssh_public_key or hcloud_ssh_public_key_path when create_hcloud_server=true."
+  }
 }
 
 variable "ssh_user" {
@@ -26,6 +94,10 @@ variable "ssh_private_key" {
   type        = string
   default     = ""
   sensitive   = true
+  validation {
+    condition     = length(var.ssh_private_key) > 0 || length(var.ssh_private_key_path) > 0
+    error_message = "Provide ssh_private_key or ssh_private_key_path."
+  }
 }
 
 variable "git_repo_url" {

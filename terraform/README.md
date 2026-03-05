@@ -6,6 +6,7 @@ It **does not** replace the bootstrap scripts. It orchestrates them over SSH and
 
 ## ✅ What this does
 
+- (Optional) **Creates a Hetzner Cloud server** from scratch
 - Connects to the VPS via SSH
 - Ensures the repo exists at `/root/vps-bootstrap`
 - Writes `bootstrap/.env` from variables (no secrets committed)
@@ -13,7 +14,23 @@ It **does not** replace the bootstrap scripts. It orchestrates them over SSH and
 - Runs `bootstrap/apply.sh` (or dry-run / module / from)
 - Optionally runs `ssh-lockdown` and `user-lockdown`
 
-## 🔧 Usage
+## 🔧 Usage — Full fresh server (Hetzner Cloud)
+
+```bash
+cd terraform
+terraform init
+
+terraform apply \
+  -var="create_hcloud_server=true" \
+  -var="hcloud_token=HCLOUD_TOKEN" \
+  -var="hcloud_ssh_public_key_path=~/.ssh/id_ed25519.pub" \
+  -var="ssh_private_key_path=~/.ssh/id_ed25519" \
+  -var="hetzner_api_token=HETZNER_DNS_TOKEN" \
+  -var="vpn_domain=example.com" \
+  -var="acme_email=admin@example.com"
+```
+
+## 🔧 Usage — Existing server (SSH only)
 
 ```bash
 cd terraform
