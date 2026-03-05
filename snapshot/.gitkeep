@@ -1,3 +1,0 @@
-# This directory stores system snapshots
-# Snapshots are created with: make snapshot
-# Each snapshot is in a timestamped subdirectory

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# modules/04-firewall.sh — nftables ruleset
+# core/03-firewall.sh — nftables ruleset
 # =============================================================================
 # Implements the complete packet filter for the VPS.
 #
@@ -31,7 +31,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "${SCRIPT_DIR}/lib/logging.sh"
 source "${SCRIPT_DIR}/lib/backup.sh"
 
-BOOTSTRAP_MODULE="04-firewall"
+BOOTSTRAP_MODULE="firewall"
 
 # ── Generate nftables ruleset ────────────────────────────────────────────────
 # CRITICAL: This ruleset allows SSH on WAN during bootstrap phase.

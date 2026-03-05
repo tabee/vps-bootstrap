@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# modules/05-docker.sh — Docker CE installation and hardened configuration
+# core/04-docker.sh — Docker CE installation and hardened configuration
 # =============================================================================
 # Installs Docker CE from official repository and configures:
 #   - iptables: false     → Docker does NOT manipulate firewall rules
@@ -32,7 +32,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "${SCRIPT_DIR}/lib/logging.sh"
 source "${SCRIPT_DIR}/lib/backup.sh"
 
-BOOTSTRAP_MODULE="05-docker"
+BOOTSTRAP_MODULE="docker"
 
 # ── Install Docker CE ────────────────────────────────────────────────────────
 install_docker() {

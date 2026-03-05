@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# modules/08-whoami.sh — whoami diagnostic service
+# services/whoami.sh — whoami diagnostic service
 # =============================================================================
 # Deploys a minimal HTTP echo service for verifying:
 #   - Traefik routing works
@@ -21,7 +21,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "${SCRIPT_DIR}/lib/logging.sh"
 source "${SCRIPT_DIR}/lib/backup.sh"
 
-BOOTSTRAP_MODULE="08-whoami"
+BOOTSTRAP_MODULE="whoami"
 
 WHOAMI_DIR="/opt/whoami"
 

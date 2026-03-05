@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# modules/01-system.sh — Base system packages, sysctl, SSH hardening
+# core/01-system.sh — Base system packages, sysctl, SSH hardening
 # =============================================================================
 # Installs required packages, configures kernel parameters, and locks down SSH
 # to listen only on the WireGuard interface.
@@ -18,7 +18,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "${SCRIPT_DIR}/lib/logging.sh"
 source "${SCRIPT_DIR}/lib/backup.sh"
 
-BOOTSTRAP_MODULE="01-system"
+BOOTSTRAP_MODULE="system"
 
 # Keep apt non-interactive to avoid blocking debconf/whiptail prompts
 export DEBIAN_FRONTEND="${DEBIAN_FRONTEND:-noninteractive}"
@@ -142,7 +142,7 @@ configure_ssh() {
   local sshd_conf="/etc/ssh/sshd_config.d/99-bootstrap.conf"
 
   # SAFETY: Keep SSH accessible on all interfaces during bootstrap
-  # The firewall (nftables) will still block SSH from WAN after module 04
+  # The firewall (nftables) will still block SSH from WAN after core/03-firewall
   # but SSH will work via console/recovery if wg0 fails
   local content
   content="$(cat <<'SSHD'

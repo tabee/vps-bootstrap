@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# modules/02-network.sh — systemd-networkd + WireGuard configuration
+# core/02-wireguard.sh — systemd-networkd + WireGuard configuration
 # =============================================================================
 # Configures:
 #   - eth0 via DHCP (Hetzner Cloud)
@@ -25,7 +25,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "${SCRIPT_DIR}/lib/logging.sh"
 source "${SCRIPT_DIR}/lib/backup.sh"
 
-BOOTSTRAP_MODULE="02-network"
+BOOTSTRAP_MODULE="wireguard"
 
 # Load environment
 if [[ -f "${SCRIPT_DIR}/.env" ]]; then

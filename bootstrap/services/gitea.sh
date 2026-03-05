@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# modules/07-gitea.sh — Gitea + PostgreSQL stack
+# services/gitea.sh — Gitea + PostgreSQL stack
 # =============================================================================
 # Deploys:
 #   - PostgreSQL 16 (Alpine) at 10.20.0.31
@@ -27,7 +27,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "${SCRIPT_DIR}/lib/logging.sh"
 source "${SCRIPT_DIR}/lib/backup.sh"
 
-BOOTSTRAP_MODULE="07-gitea"
+BOOTSTRAP_MODULE="gitea"
 
 # Load environment
 if [[ -f "${SCRIPT_DIR}/.env" ]]; then

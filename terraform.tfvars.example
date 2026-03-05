@@ -1,0 +1,61 @@
+# =============================================================================
+# VPS Bootstrap - Example Configuration
+# =============================================================================
+# Copy this file to terraform.tfvars and fill in your values:
+#   cp terraform.tfvars.example terraform.tfvars
+# =============================================================================
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PFLICHT - Ohne diese geht nichts
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Server IP from Hetzner Cloud Console
+ssh_host = "123.45.67.89"
+
+# Path to your SSH private key
+ssh_private_key_path = "~/.ssh/id_ed25519"
+
+# Your domain (DNS must point to server)
+domain = "example.com"
+
+# Hetzner DNS API token (for Let's Encrypt DNS-01 challenge)
+# Get from: https://console.hetzner.cloud/ → Project → Security → API Tokens
+# Note: Old dns.hetzner.com tokens no longer work since 2025
+hetzner_dns_token = "your-dns-api-token"
+
+# Email for Let's Encrypt notifications
+acme_email = "admin@example.com"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# OPTIONAL - Services
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Git server (git.example.com)
+enable_gitea = false
+
+# Workflow automation (n8n.example.com)
+enable_n8n = false
+
+# Test service (whoami.example.com)
+enable_whoami = true
+
+# ═══════════════════════════════════════════════════════════════════════════
+# OPTIONAL - VPN Clients
+# ═══════════════════════════════════════════════════════════════════════════
+
+# List of VPN clients to create
+# Remove a client from this list and run `terraform apply` to delete it
+vpn_clients = ["admin", "laptop", "phone"]
+
+# ═══════════════════════════════════════════════════════════════════════════
+# OPTIONAL - Advanced
+# ═══════════════════════════════════════════════════════════════════════════
+
+# SSH username after hardening (default: admin)
+# admin_user = "admin"
+
+# Skip final hardening (keeps SSH accessible via public IP)
+# skip_harden = false
+
+# Server hostname
+# hostname = "vps"

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# modules/06-traefik.sh — Traefik reverse proxy (file provider only)
+# core/05-traefik.sh — Traefik reverse proxy (file provider only)
 # =============================================================================
 # Deploys Traefik as the SINGLE INGRESS POINT for all services.
 #
@@ -32,7 +32,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "${SCRIPT_DIR}/lib/logging.sh"
 source "${SCRIPT_DIR}/lib/backup.sh"
 
-BOOTSTRAP_MODULE="06-traefik"
+BOOTSTRAP_MODULE="traefik"
 
 # Load environment
 if [[ -f "${SCRIPT_DIR}/.env" ]]; then
