@@ -10,6 +10,97 @@ Erstellt einen gehärteten Debian 12 Server mit:
 
 ---
 
+## 🤖 OpenClaw-Ready: KI-Agenten ohne Credential-Leaks
+
+> **Dieses Setup ist speziell dafür konzipiert, dass KI-Agenten (wie [OpenClaw](https://openclaw.io)) sicher auf Services zugreifen können — ohne dass Secrets jemals an ein LLM gesendet werden.**
+
+### Das Problem
+
+KI-Agenten mit LLM-Backend brauchen Zugriff auf Tools (Git, E-Mail, Kalender, Workflows). Aber:
+- Credentials im Agent-Prompt → LLM sieht sie → Sicherheitsrisiko
+- API-Keys in Agent-Config → potentiell im Training-Data
+
+### Die Lösung: Credentials bleiben auf dem VPS
+
+```
+┌─────────────────────────┐                              ┌──────────────────────────────┐
+│   OpenClaw              │                              │  Dein VPS (dieses Repo)      │
+│   (separater VPS)       │                              │                              │
+│                         │                              │  ┌────────────────────────┐  │
+│  ┌───────────────────┐  │   WireGuard VPN (10.100.x)   │  │ 🔒 Credentials hier:   │  │
+│  │ KI-Agent + LLM    │  │ ◄────────────────────────────┤  │                        │  │
+│  │                   │  │                              │  │ • SSH Private Keys     │  │
+│  │ Sieht NUR:        │  │   SSH: gog gmail search ...  │  │ • Google OAuth Tokens  │  │
+│  │ • JSON-Responses  │  │ ─────────────────────────────►  │ • DB-Passwörter        │  │
+│  │ • API-Antworten   │  │                              │  │ • Service Secrets      │  │
+│  │                   │  │   HTTPS: Gitea/n8n API       │  │                        │  │
+│  │ Sieht NICHT:      │  │ ─────────────────────────────►  └────────────────────────┘  │
+│  │ • OAuth Secrets   │  │                              │                              │
+│  │ • Private Keys    │  │                              │  ┌────────────────────────┐  │
+│  │ • DB-Passwörter   │  │ ◄──── JSON Response ─────────┤  │ Services:              │  │
+│  └───────────────────┘  │                              │  │ • Traefik (Reverse     │  │
+│                         │                              │  │   Proxy)               │  │
+│  WireGuard Client +     │                              │  │ • Gitea (Git API)      │  │
+│  SSH Key (lokal)        │                              │  │ • n8n (Workflows)      │  │
+│                         │                              │  │ • gogcli (Google CLI)  │  │
+└─────────────────────────┘                              └──────────────────────────────┘
+```
+
+### Zwei Zugriffsmuster
+
+| Muster | Services | Wie | Was LLM sieht |
+|--------|----------|-----|---------------|
+| **SSH/CLI** | Google Workspace (gogcli) | `ssh admin@10.100.0.1 "gog gmail ..."` | Nur JSON-Response |
+| **HTTPS/API** | Gitea, n8n | API-Calls via Traefik | Nur API-Response |
+
+### Beispiel: OpenClaw liest E-Mails
+
+```bash
+# OpenClaw führt aus (SSH-Key liegt auf OpenClaw-VPS, nicht beim LLM):
+ssh admin@10.100.0.1 "gog gmail search 'is:unread' --max 5 --json"
+
+# LLM sieht nur die Antwort:
+[{"id": "abc123", "subject": "Meeting morgen", "from": "chef@firma.de"}]
+
+# LLM sieht NICHT:
+# • Google OAuth Client Secret (in /opt/gogcli/)
+# • Google Access/Refresh Token (in /opt/gogcli/)
+# • SSH Private Key (liegt auf OpenClaw-VPS)
+```
+
+### Beispiel: OpenClaw erstellt Git Issue
+
+```bash
+# OpenClaw ruft auf (Token hat nur Issue-Rechte, nicht Admin):
+curl -H "Authorization: token giteaXYZ..." \
+  https://git.deine-domain.de/api/v1/repos/user/repo/issues \
+  -d '{"title": "Bug gefunden"}'
+
+# LLM kennt nur den eingeschränkten API-Token
+# LLM kennt NICHT:
+# • Gitea Admin-Passwort
+# • PostgreSQL Credentials
+# • Gitea Secret Key / Internal Token
+```
+
+### OpenClaw als VPN-Client einrichten
+
+```hcl
+# In terraform.tfvars:
+vpn_clients = ["admin", "laptop", "openclaw"]
+```
+
+```bash
+terraform apply
+
+# WireGuard-Config für OpenClaw abrufen:
+terraform output -json vpn_configs | jq -r '.openclaw'
+```
+
+Dann auf dem OpenClaw-VPS die WireGuard-Config installieren und SSH-Key für `admin@10.100.0.1` hinterlegen.
+
+---
+
 ## Voraussetzungen
 
 ### 1. Server erstellen (5 Min)
