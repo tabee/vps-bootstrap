@@ -27,6 +27,11 @@ make ssh-lockdown
 make user-lockdown
 ```
 
+## Terraform (optional)
+
+A Terraform wrapper is available under `terraform/` to orchestrate this bootstrap over SSH.
+See `terraform/README.md` for usage.
+
 ## Optional Modules
 
 ### n8n workflow automation (module `10-n8n`)
