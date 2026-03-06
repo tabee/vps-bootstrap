@@ -28,12 +28,13 @@ APT_OPTS=(
 )
 
 # ── Required packages ───────────────────────────────────────────────────────
+# NOTE: systemd-resolved is NOT in this list - Debian 12 minimal uses /etc/resolv.conf
+# We configure DNS directly via resolv.conf and dnsmasq for VPN
 REQUIRED_PACKAGES=(
   wireguard
   wireguard-tools
   nftables
   dnsmasq
-  systemd-resolved
   curl
   ca-certificates
   gnupg
@@ -46,29 +47,31 @@ REQUIRED_PACKAGES=(
 )
 
 # ── Prepare DNS resolution ──────────────────────────────────────────────────
-# Hetzner images often have dnsmasq pre-installed and listening on 127.0.0.53,
-# which conflicts with systemd-resolved. Stop it before package installation.
+# Hetzner images may have dnsmasq pre-installed. Stop it before installation.
+# We use /etc/resolv.conf directly (not systemd-resolved - not on all images).
 prepare_dns_resolution() {
   log_step "Preparing DNS resolution"
 
-  # Check if dnsmasq is running and conflicts with systemd-resolved
+  # Check if dnsmasq is running and blocking DNS
   if systemctl is-active --quiet dnsmasq 2>/dev/null; then
-    log_info "Stopping pre-installed dnsmasq (conflicts with systemd-resolved)"
+    log_info "Stopping pre-installed dnsmasq (will configure for VPN later)"
     systemctl stop dnsmasq || true
     # Don't disable yet - we'll configure it properly for VPN later
   fi
 
-  # Ensure systemd-resolved can start and has upstream DNS
-  if ! systemctl is-active --quiet systemd-resolved; then
-    systemctl start systemd-resolved || true
+  # Ensure /etc/resolv.conf has working nameservers
+  if ! grep -q 'nameserver' /etc/resolv.conf 2>/dev/null; then
+    log_info "Setting DNS in /etc/resolv.conf"
+    echo "nameserver 1.1.1.1" > /etc/resolv.conf
+    echo "nameserver 8.8.8.8" >> /etc/resolv.conf
   fi
 
   # Verify DNS actually works
   if ! host -W 2 deb.debian.org 1.1.1.1 >/dev/null 2>&1; then
     log_warn "DNS via 1.1.1.1 failed; configuring fallback"
-    echo "nameserver 1.1.1.1" > /etc/resolv.conf.tmp
     cp /etc/resolv.conf /etc/resolv.conf.backup 2>/dev/null || true
-    mv /etc/resolv.conf.tmp /etc/resolv.conf
+    echo "nameserver 1.1.1.1" > /etc/resolv.conf
+    echo "nameserver 8.8.8.8" >> /etc/resolv.conf
   fi
 
   log_info "DNS resolution ready"
@@ -105,8 +108,12 @@ install_packages() {
     systemctl disable dnsmasq || true
   fi
 
-  # Restart systemd-resolved to reclaim port 53
-  systemctl restart systemd-resolved || true
+  # Ensure DNS is working via /etc/resolv.conf (systemd-resolved not available)
+  if ! grep -q 'nameserver' /etc/resolv.conf 2>/dev/null; then
+    echo 'nameserver 1.1.1.1' > /etc/resolv.conf
+    echo 'nameserver 8.8.8.8' >> /etc/resolv.conf
+  fi
+  log_info "DNS configured via /etc/resolv.conf"
   sleep 1
 }
 

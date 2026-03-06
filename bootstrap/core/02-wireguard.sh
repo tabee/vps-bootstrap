@@ -234,20 +234,42 @@ enable_networkd() {
   # ── Load WireGuard kernel module ──────────────────────────────────────────
   # CRITICAL: systemd-networkd cannot create wg0 without the module loaded.
   # On minimal Debian installs the module may not auto-load.
+  # On kernel 5.6+ WireGuard may be built-in (not a module) - that's fine.
   log_info "Loading WireGuard kernel module..."
-  if ! lsmod | grep -q '^wireguard'; then
-    modprobe wireguard || {
-      log_error "Failed to load wireguard kernel module"
-      log_error "Check: dmesg | grep -i wireguard"
-      log_error "The kernel may need wireguard-dkms or a newer kernel"
-    }
+  
+  # Check if WireGuard is built-in (kernel 5.6+)
+  local wg_builtin=false
+  if [[ -d /sys/module/wireguard ]]; then
+    wg_builtin=true
+    log_info "✅ WireGuard is built into kernel (no module needed)"
+  elif grep -q 'wireguard' /lib/modules/$(uname -r)/modules.builtin 2>/dev/null; then
+    wg_builtin=true
+    log_info "✅ WireGuard is built into kernel"
   fi
   
-  # Verify module is loaded
-  if lsmod | grep -q '^wireguard'; then
-    log_info "✅ WireGuard kernel module loaded"
+  # Try to load module if not built-in
+  if [[ "$wg_builtin" != "true" ]]; then
+    if ! lsmod | grep -q '^wireguard'; then
+      modprobe wireguard || {
+        log_error "Failed to load wireguard kernel module"
+        log_error "Check: dmesg | grep -i wireguard"
+        log_error "The kernel may need wireguard-dkms or a newer kernel"
+      }
+    fi
+    
+    # Verify module is loaded
+    if lsmod | grep -q '^wireguard'; then
+      log_info "✅ WireGuard kernel module loaded"
+    else
+      log_warn "⚠️  WireGuard module not loaded — will try anyway (may be built-in)"
+    fi
+  fi
+  
+  # Final verification: can we actually use wg?
+  if wg show 2>/dev/null || [[ "$wg_builtin" == "true" ]]; then
+    log_info "WireGuard is available"
   else
-    log_warn "⚠️  WireGuard module not loaded — wg0 will not work"
+    log_warn "WireGuard may not work - continue anyway"
   fi
 
   # ── Ensure wireguard module loads on boot ─────────────────────────────────
