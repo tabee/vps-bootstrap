@@ -99,31 +99,47 @@ install_binary() {
   latest_version=$(curl -sL https://api.github.com/repos/steipete/gogcli/releases/latest | grep tag_name | cut -d'"' -f4)
   
   if [[ -z "$latest_version" ]]; then
-    log_warn "Could not determine latest version, using 'latest'"
-    latest_version="latest"
+    log_warn "Could not determine latest version"
+    log_fatal "Cannot install gogcli: GitHub API returned no version"
   fi
+
+  # Strip 'v' prefix for filename (v0.11.0 -> 0.11.0)
+  local version_num="${latest_version#v}"
 
   log_info "Installing gogcli $latest_version..."
 
-  # Download binary
-  local download_url="https://github.com/steipete/gogcli/releases/download/${latest_version}/gog_linux_amd64"
-  local tmpfile
-  tmpfile=$(mktemp)
+  # Download tarball (format: gogcli_VERSION_linux_amd64.tar.gz)
+  local download_url="https://github.com/steipete/gogcli/releases/download/${latest_version}/gogcli_${version_num}_linux_amd64.tar.gz"
+  local tmpdir
+  tmpdir=$(mktemp -d)
+  local tmpfile="${tmpdir}/gogcli.tar.gz"
   
   if ! curl -sL "$download_url" -o "$tmpfile"; then
-    rm -f "$tmpfile"
+    rm -rf "$tmpdir"
     log_fatal "Failed to download gogcli from $download_url"
   fi
 
-  # Verify it's a valid binary (not HTML error page)
-  if ! file "$tmpfile" | grep -q "ELF"; then
-    rm -f "$tmpfile"
-    log_fatal "Downloaded file is not a valid binary"
+  # Verify it's a gzip file
+  if ! file "$tmpfile" | grep -q "gzip"; then
+    rm -rf "$tmpdir"
+    log_fatal "Downloaded file is not a valid tar.gz archive"
+  fi
+
+  # Extract and find binary
+  tar -xzf "$tmpfile" -C "$tmpdir"
+  
+  local binary_path
+  binary_path=$(find "$tmpdir" -name "gog" -o -name "gogcli" | head -1)
+  
+  if [[ -z "$binary_path" || ! -f "$binary_path" ]]; then
+    rm -rf "$tmpdir"
+    log_fatal "Could not find gogcli binary in archive"
   fi
 
   # Install
-  chmod +x "$tmpfile"
-  mv "$tmpfile" "$GOGCLI_BIN"
+  chmod +x "$binary_path"
+  mv "$binary_path" "$GOGCLI_BIN"
+  rm -rf "$tmpdir"
   
   # Verify installation
   if ! "$GOGCLI_BIN" --version &>/dev/null; then
