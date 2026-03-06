@@ -138,7 +138,7 @@ cmd_add() {
   server_endpoint=$(get_server_endpoint)
   
   # Generate client config (Split-Tunnel: only VPN subnet routed through VPN)
-  # NOTE: No DNS setting - split-tunnel keeps client's normal DNS
+  # DNS points to VPN gateway (dnsmasq) which resolves *.domain → Traefik
   cat > "${client_dir}/client.conf" <<EOF
 # WireGuard Config: ${name}
 # Generated: $(date -Iseconds)
@@ -146,6 +146,7 @@ cmd_add() {
 [Interface]
 PrivateKey = ${privkey}
 Address = ${client_ip}/24
+DNS = ${VPN_SUBNET}.1
 
 [Peer]
 PublicKey = ${server_pubkey}
