@@ -184,8 +184,8 @@ SYSCTL
 #
 # Strategy:
 #   1. Initial bootstrap: SSH listens on ALL interfaces (0.0.0.0)
-#   2. After VPN is verified working: manually run "make ssh-lockdown"
-#   3. Or on next reboot after VPN client connected successfully
+#   2. After VPN is verified working: run core/06-harden.sh (via Terraform or manual)
+#   3. 06-harden.sh restricts SSH to VPN only and enables fail2ban
 configure_ssh() {
   log_step "Configuring SSH (hardening, but NOT restricting to VPN yet)"
 
@@ -200,7 +200,7 @@ configure_ssh() {
 # 99-bootstrap.conf — SSH hardening
 # =============================================================================
 # SSH listens on ALL interfaces during initial bootstrap.
-# After VPN is verified, run "make ssh-lockdown" to restrict to wg0 only.
+# After VPN is verified, 06-harden.sh restricts SSH to wg0 only.
 #
 # SECURITY: nftables blocks SSH from WAN (eth0), so this is safe.
 #           SSH is only reachable via VPN (wg0) or console.

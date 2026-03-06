@@ -35,7 +35,7 @@ BOOTSTRAP_MODULE="firewall"
 
 # ── Generate nftables ruleset ────────────────────────────────────────────────
 # CRITICAL: This ruleset allows SSH on WAN during bootstrap phase.
-# After VPN is verified working, run "make ssh-lockdown" to restrict SSH to VPN only.
+# After VPN is verified working, 06-harden.sh restricts SSH to VPN only.
 generate_ruleset() {
   cat <<'NFT'
 #!/usr/sbin/nft -f
@@ -52,7 +52,7 @@ generate_ruleset() {
 #   4. Docker iptables disabled — all filtering via nftables
 #
 # ⚠️  BOOTSTRAP MODE: SSH is allowed on WAN for recovery.
-#    After VPN is working, run "make ssh-lockdown" to disable WAN SSH.
+#    After VPN is working, 06-harden.sh disables WAN SSH.
 # =============================================================================
 
 flush ruleset
@@ -100,7 +100,7 @@ table inet filter {
     iifname $WAN_IF udp dport 51820 limit rate 25/second burst 50 packets accept
 
     # ⚠️  BOOTSTRAP MODE: Allow SSH on WAN for recovery access
-    # This rule is removed by "make ssh-lockdown" after VPN is verified working.
+    # This rule is removed by 06-harden.sh after VPN is verified working.
     # Rate-limited to prevent brute-force attacks.
     iifname $WAN_IF tcp dport 22 limit rate 10/minute burst 5 packets accept comment "bootstrap-ssh-wan"
 
