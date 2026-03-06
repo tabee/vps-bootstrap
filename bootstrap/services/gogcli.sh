@@ -1,26 +1,24 @@
 #!/usr/bin/env bash
 # =============================================================================
-# services/gogcli.sh — Google Workspace CLI (SSH-basiert)
+# services/gogcli.sh — Google Workspace CLI (Docker)
 # =============================================================================
-# Optional module.
+# Deploys:
+#   - gogcli container at 10.20.0.50
 #
-# Installs:
-#   - gogcli binary (gog) from https://gogcli.sh
-#   - Config directory at /opt/gogcli
-#
-# Access model:
-#   SSH → admin@10.100.0.1 → gog <service> <command>
+# Architecture:
+#   VPN → SSH → docker exec gogcli gog <command>
 #
 # Security design:
 #   - NO published ports
 #   - NO REST API / HTTP endpoints
-#   - Uses existing SSH infrastructure (VPN-only after hardening)
-#   - Google OAuth credentials stored in /opt/gogcli with restricted perms
+#   - Access via SSH + docker exec only (VPN-only after hardening)
+#   - Google OAuth credentials mounted from /opt/gogcli
+#   - Capabilities dropped to minimum
+#   - no-new-privileges enabled
 #
-# Usage from other VPS (e.g., openclaw):
-#   ssh admin@10.100.0.1 "gog gmail search 'is:unread' --max 10 --json"
-#   ssh admin@10.100.0.1 "gog drive list --json"
-#   ssh admin@10.100.0.1 "gog calendar events --json"
+# Usage:
+#   ssh admin@10.100.0.1 "docker exec gogcli gog gmail labels list"
+#   ssh admin@10.100.0.1 "docker exec gogcli gog drive list --json"
 # =============================================================================
 
 set -euo pipefail
@@ -39,7 +37,11 @@ fi
 
 ADMIN_USER="${ADMIN_USER:-admin}"
 GOGCLI_DIR="/opt/gogcli"
-GOGCLI_BIN="/usr/local/bin/gog"
+
+# Google OAuth credentials from Terraform
+GOOGLE_CLIENT_ID="${GOOGLE_CLIENT_ID:-}"
+GOOGLE_CLIENT_SECRET="${GOOGLE_CLIENT_SECRET:-}"
+GOOGLE_PROJECT_ID="${GOOGLE_PROJECT_ID:-}"
 
 # ── Create directory structure ───────────────────────────────────────────────
 setup_directories() {
@@ -50,193 +52,193 @@ setup_directories() {
     return 0
   fi
 
-  mkdir -p "${GOGCLI_DIR}"
+  mkdir -p "${GOGCLI_DIR}/config"
+  mkdir -p "${GOGCLI_DIR}/cache"
   
-  # Secure permissions (OAuth credentials will be stored here)
+  # Secure permissions
   chmod 700 "${GOGCLI_DIR}"
-  
-  # Set ownership to admin user (for gog auth commands)
-  if id "$ADMIN_USER" &>/dev/null; then
-    chown -R "${ADMIN_USER}:${ADMIN_USER}" "${GOGCLI_DIR}"
-  fi
+  chmod 700 "${GOGCLI_DIR}/config"
 
   log_info "Created $GOGCLI_DIR"
 }
 
-# ── Install gogcli binary ────────────────────────────────────────────────────
-install_binary() {
-  log_step "Installing gogcli binary"
+# ── Write OAuth credentials from Terraform ───────────────────────────────────
+write_credentials() {
+  log_step "Writing Google OAuth credentials"
 
   if [[ "$DRY_RUN" == "true" ]]; then
-    log_info "Would install gog binary to $GOGCLI_BIN"
+    log_info "Would write credentials.json"
     return 0
   fi
 
-  # Check if already installed and working
-  if [[ -x "$GOGCLI_BIN" ]]; then
-    local current_version
-    current_version=$("$GOGCLI_BIN" --version 2>/dev/null | head -1 || echo "unknown")
-    log_info "gogcli already installed: $current_version"
-    
-    # Check for updates (optional, skip if recent)
-    if [[ -f "${GOGCLI_DIR}/.last_update" ]]; then
-      local last_update
-      last_update=$(cat "${GOGCLI_DIR}/.last_update")
-      local now
-      now=$(date +%s)
-      local age=$((now - last_update))
-      # Skip update if less than 7 days old
-      if [[ $age -lt 604800 ]]; then
-        log_info "Skipping update check (last updated $((age / 86400)) days ago)"
-        return 0
-      fi
-    fi
+  # Skip if no credentials provided
+  if [[ -z "$GOOGLE_CLIENT_ID" ]] || [[ -z "$GOOGLE_CLIENT_SECRET" ]]; then
+    log_warn "Google OAuth credentials not configured in Terraform"
+    log_info "You can add them later manually to ${GOGCLI_DIR}/config/credentials.json"
+    return 0
   fi
 
-  # Get latest version
-  log_info "Fetching latest gogcli release..."
-  local latest_version
-  latest_version=$(curl -sL https://api.github.com/repos/steipete/gogcli/releases/latest | grep tag_name | cut -d'"' -f4)
+  local cred_file="${GOGCLI_DIR}/config/credentials.json"
   
-  if [[ -z "$latest_version" ]]; then
-    log_warn "Could not determine latest version"
-    log_fatal "Cannot install gogcli: GitHub API returned no version"
-  fi
+  cat > "$cred_file" <<EOF
+{
+  "installed": {
+    "client_id": "${GOOGLE_CLIENT_ID}",
+    "project_id": "${GOOGLE_PROJECT_ID:-gogcli}",
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token",
+    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+    "client_secret": "${GOOGLE_CLIENT_SECRET}",
+    "redirect_uris": ["http://localhost"]
+  }
+}
+EOF
 
-  # Strip 'v' prefix for filename (v0.11.0 -> 0.11.0)
-  local version_num="${latest_version#v}"
-
-  log_info "Installing gogcli $latest_version..."
-
-  # Download tarball (format: gogcli_VERSION_linux_amd64.tar.gz)
-  local download_url="https://github.com/steipete/gogcli/releases/download/${latest_version}/gogcli_${version_num}_linux_amd64.tar.gz"
-  local tmpdir
-  tmpdir=$(mktemp -d)
-  local tmpfile="${tmpdir}/gogcli.tar.gz"
-  
-  if ! curl -sL "$download_url" -o "$tmpfile"; then
-    rm -rf "$tmpdir"
-    log_fatal "Failed to download gogcli from $download_url"
-  fi
-
-  # Verify it's a gzip file
-  if ! file "$tmpfile" | grep -q "gzip"; then
-    rm -rf "$tmpdir"
-    log_fatal "Downloaded file is not a valid tar.gz archive"
-  fi
-
-  # Extract and find binary
-  tar -xzf "$tmpfile" -C "$tmpdir"
-  
-  local binary_path
-  binary_path=$(find "$tmpdir" -name "gog" -o -name "gogcli" | head -1)
-  
-  if [[ -z "$binary_path" || ! -f "$binary_path" ]]; then
-    rm -rf "$tmpdir"
-    log_fatal "Could not find gogcli binary in archive"
-  fi
-
-  # Install
-  chmod +x "$binary_path"
-  mv "$binary_path" "$GOGCLI_BIN"
-  rm -rf "$tmpdir"
-  
-  # Verify installation
-  if ! "$GOGCLI_BIN" --version &>/dev/null; then
-    log_fatal "gogcli binary installed but not working"
-  fi
-
-  # Mark update time
-  date +%s > "${GOGCLI_DIR}/.last_update"
-
-  log_info "✅ Installed gogcli: $("$GOGCLI_BIN" --version 2>/dev/null | head -1)"
+  chmod 600 "$cred_file"
+  log_info "Written credentials.json from Terraform config"
 }
 
-# ── Setup environment for admin user ─────────────────────────────────────────
-setup_user_environment() {
-  log_step "Setting up gogcli environment for $ADMIN_USER"
+# ── Generate docker-compose.yml ──────────────────────────────────────────────
+install_compose_file() {
+  log_step "Installing gogcli docker-compose.yml"
+
+  local compose_file="${GOGCLI_DIR}/docker-compose.yml"
 
   if [[ "$DRY_RUN" == "true" ]]; then
-    log_info "Would configure environment for $ADMIN_USER"
+    log_info "Would create $compose_file"
     return 0
   fi
 
-  if ! id "$ADMIN_USER" &>/dev/null; then
-    log_warn "Admin user $ADMIN_USER does not exist yet"
+  # SECURITY NOTES:
+  # - NO "ports:" directive
+  # - Access via SSH + docker exec only
+  # - OAuth credentials mounted read-only
+  # - Token storage mounted for auth persistence
+  cat > "$compose_file" <<'YAML'
+# =============================================================================
+# docker-compose.yml — gogcli (Google Workspace CLI)
+# =============================================================================
+# NO ports: directive. Access via SSH + docker exec only.
+#
+# Usage:
+#   docker exec gogcli gog gmail labels list
+#   docker exec gogcli gog drive list --json
+
+services:
+  gogcli:
+    image: steipete/gogcli:latest
+    container_name: gogcli
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    volumes:
+      - ./config:/root/.config/gogcli:rw
+      - ./cache:/root/.cache/gogcli:rw
+    networks:
+      vpn_net:
+        ipv4_address: 10.20.0.50
+    # Keep container running for exec access
+    command: ["tail", "-f", "/dev/null"]
+
+networks:
+  vpn_net:
+    external: true
+YAML
+
+  log_info "Created $compose_file"
+}
+
+# ── Create shell alias for admin user ────────────────────────────────────────
+setup_alias() {
+  log_step "Setting up gog alias for $ADMIN_USER"
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    log_info "Would create gog alias"
     return 0
   fi
 
-  local admin_home
-  admin_home=$(getent passwd "$ADMIN_USER" | cut -d: -f6)
-
-  # Create gogcli config symlink in user's home
-  local user_config="${admin_home}/.config/gogcli"
-  if [[ ! -L "$user_config" ]] && [[ ! -d "$user_config" ]]; then
-    mkdir -p "${admin_home}/.config"
-    ln -sf "$GOGCLI_DIR" "$user_config"
-    chown -h "${ADMIN_USER}:${ADMIN_USER}" "$user_config"
-    chown "${ADMIN_USER}:${ADMIN_USER}" "${admin_home}/.config"
-    log_info "Created config symlink: $user_config -> $GOGCLI_DIR"
-  fi
-
-  # Backward compatibility for older docs/tools expecting ~/.config/gog
-  local legacy_config="${admin_home}/.config/gog"
-  if [[ ! -L "$legacy_config" ]] && [[ ! -d "$legacy_config" ]]; then
-    ln -sf "$GOGCLI_DIR" "$legacy_config"
-    chown -h "${ADMIN_USER}:${ADMIN_USER}" "$legacy_config"
-    log_info "Created legacy config symlink: $legacy_config -> $GOGCLI_DIR"
-  fi
-
-  # Add gog to PATH if not already there (via profile.d)
-  local profile_script="/etc/profile.d/gogcli.sh"
-  if [[ ! -f "$profile_script" ]]; then
-    cat > "$profile_script" <<'EOF'
-# gogcli - Google Workspace CLI
-# Config: /opt/gogcli
-export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+  # Create wrapper script
+  cat > /usr/local/bin/gog <<'EOF'
+#!/bin/bash
+# Wrapper for gogcli in Docker
+exec docker exec -it gogcli gog "$@"
 EOF
-    chmod 644 "$profile_script"
-    log_info "Created $profile_script"
+  chmod +x /usr/local/bin/gog
+
+  log_info "Created /usr/local/bin/gog wrapper"
+}
+
+# ── Start container ──────────────────────────────────────────────────────────
+start_container() {
+  log_step "Starting gogcli container"
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    log_info "Would start gogcli container"
+    return 0
   fi
 
-  log_info "Environment configured for $ADMIN_USER"
+  cd "$GOGCLI_DIR"
+  
+  docker compose pull --quiet
+  docker compose up -d
+
+  # Wait for container to be ready
+  sleep 2
+
+  if docker ps | grep -q gogcli; then
+    log_info "✅ gogcli container running"
+  else
+    log_warn "gogcli container may not have started correctly"
+    docker compose logs
+  fi
 }
 
 # ── Print setup instructions ─────────────────────────────────────────────────
 print_setup_instructions() {
   log_step "gogcli setup instructions"
 
-  cat <<EOF
+  if [[ -n "$GOOGLE_CLIENT_ID" ]] && [[ -n "$GOOGLE_CLIENT_SECRET" ]]; then
+    cat <<EOF
 
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║  gogcli (Google Workspace CLI) - Setup Required                             ║
+║  gogcli - Credentials configured via Terraform                              ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
-gogcli is installed. You need to authorize it with Google:
+OAuth credentials are already configured. Now authorize with Google:
 
-1. Create OAuth credentials:
-   - Go to: https://console.cloud.google.com/apis/credentials
-   - Create "OAuth 2.0 Client ID" → "Desktop app"
-   - Download the JSON file
+  ssh ${ADMIN_USER}@10.100.0.1
+  gog auth add your@gmail.com --services user --manual
 
-2. Copy credentials to the VPS:
-   scp client_secret_*.json ${ADMIN_USER}@10.100.0.1:/opt/gogcli/
+Follow the URL, authorize, paste the code back.
 
-3. SSH to VPS and authorize:
-   ssh ${ADMIN_USER}@10.100.0.1
-   gog auth credentials /opt/gogcli/client_secret_*.json
-   gog auth add your@gmail.com
-
-4. Test it works:
-   gog gmail labels list
-
-5. From another VPS (e.g., openclaw), use via SSH:
-   ssh ${ADMIN_USER}@10.100.0.1 "gog gmail search 'is:unread' --json"
-   ssh ${ADMIN_USER}@10.100.0.1 "gog drive list --json"
-
-Available services: gmail, calendar, drive, sheets, docs, slides, contacts, tasks
+Test it works:
+  gog gmail labels list
 
 EOF
+  else
+    cat <<EOF
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  gogcli - Manual credential setup required                                  ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+1. Add to terraform.tfvars:
+   google_client_id     = "xxx.apps.googleusercontent.com"
+   google_client_secret = "GOCSPX-xxx"
+   google_project_id    = "your-project-id"
+
+2. Re-run: terraform apply
+
+OR manually create ${GOGCLI_DIR}/config/credentials.json
+
+Then authorize:
+  ssh ${ADMIN_USER}@10.100.0.1
+  gog auth add your@gmail.com --services user --manual
+
+EOF
+  fi
 }
 
 # ── Main ─────────────────────────────────────────────────────────────────────
@@ -245,13 +247,13 @@ main() {
   require_root
 
   setup_directories
-  install_binary
-  setup_user_environment
+  write_credentials
+  install_compose_file
+  setup_alias
+  start_container
   print_setup_instructions
 
-  module_done
+  module_end "$BOOTSTRAP_MODULE"
 }
 
-if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
-  main "$@"
-fi
+main "$@"

@@ -71,11 +71,16 @@ vpn_clients = ["admin", "laptop", "phone"]
 
 **Services:** See [docs/SERVICES.md](docs/SERVICES.md)
 
-For `gogcli` OAuth setup (Google Console old/new UI):
-- with **Download JSON** button
-- or without download (create new client secret and build `credentials.json` manually)
+> **All services run as Docker containers** — no binaries installed on host.
 
-See the `gogcli` section in [docs/SERVICES.md](docs/SERVICES.md) for the exact steps.
+For `gogcli`: Add Google OAuth credentials to `terraform.tfvars`:
+```hcl
+enable_gogcli        = true
+google_client_id     = "xxx.apps.googleusercontent.com"
+google_client_secret = "GOCSPX-xxx"
+google_project_id    = "your-project"
+```
+See [docs/SERVICES.md](docs/SERVICES.md#gogcli) for details.
 
 ---
 

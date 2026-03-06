@@ -91,6 +91,11 @@ GITEA_SECRET_KEY="${random_password.gitea_secret[0].result}"
 N8N_DB_PASSWORD="${random_password.n8n_db[0].result}"
 N8N_ENCRYPTION_KEY="${random_password.n8n_encryption[0].result}"
 %{endif~}
+%{if var.enable_gogcli~}
+GOOGLE_CLIENT_ID="${var.google_client_id}"
+GOOGLE_CLIENT_SECRET="${var.google_client_secret}"
+GOOGLE_PROJECT_ID="${var.google_project_id}"
+%{endif~}
 
 # ── VPN Clients ──────────────────────────────────────────────────────────────
 VPN_CLIENTS="${join(",", var.vpn_clients)}"

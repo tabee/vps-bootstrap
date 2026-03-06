@@ -99,9 +99,33 @@ variable "enable_whoami" {
 }
 
 variable "enable_gogcli" {
-  description = "Install Google Workspace CLI API? (gog.domain.com)"
+  description = "Install Google Workspace CLI? (Docker, SSH access only)"
   type        = bool
   default     = false
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# GOGCLI - Google OAuth Credentials (optional, can be set later manually)
+# ═══════════════════════════════════════════════════════════════════════════
+
+variable "google_client_id" {
+  description = "Google OAuth Client ID (from console.cloud.google.com/apis/credentials)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "google_client_secret" {
+  description = "Google OAuth Client Secret"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "google_project_id" {
+  description = "Google Cloud Project ID"
+  type        = string
+  default     = ""
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
