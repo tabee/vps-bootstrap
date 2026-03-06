@@ -76,7 +76,9 @@ ADMIN_USER="${var.admin_user}"
 # ── Service Flags ────────────────────────────────────────────────────────────
 ENABLE_GITEA="${var.enable_gitea}"
 ENABLE_N8N="${var.enable_n8n}"
-ENABLE_WHOAMI="${var.enable_whoami}"ENABLE_GOGCLI="${var.enable_gogcli}"
+ENABLE_WHOAMI="${var.enable_whoami}"
+ENABLE_GOGCLI="${var.enable_gogcli}"
+
 # ── Service Secrets ──────────────────────────────────────────────────────────
 %{if var.enable_gitea~}
 GITEA_DB_PASSWORD="${random_password.gitea_db[0].result}"
@@ -93,7 +95,9 @@ EOT
 
   bootstrap_command = var.skip_harden ? "sudo bash ${var.repo_path}/bootstrap/apply.sh --skip-harden" : "sudo bash ${var.repo_path}/bootstrap/apply.sh"
   
-  ssh_private_key = var.ssh_private_key != "" ? var.ssh_private_key : file(var.ssh_private_key_path)
+  # SSH-Agent nutzen wenn kein expliziter Key angegeben
+  use_ssh_agent   = var.ssh_private_key == "" && var.ssh_private_key_path == ""
+  ssh_private_key = local.use_ssh_agent ? null : (var.ssh_private_key != "" ? var.ssh_private_key : file(var.ssh_private_key_path))
 }
 
 # =============================================================================
@@ -110,6 +114,7 @@ resource "null_resource" "clone_repo" {
     host        = var.ssh_host
     user        = var.ssh_user
     port        = var.ssh_port
+    agent       = local.use_ssh_agent
     private_key = local.ssh_private_key
   }
 
@@ -139,6 +144,7 @@ resource "null_resource" "deploy_env" {
     host        = var.ssh_host
     user        = var.ssh_user
     port        = var.ssh_port
+    agent       = local.use_ssh_agent
     private_key = local.ssh_private_key
   }
 
@@ -171,6 +177,7 @@ resource "null_resource" "bootstrap" {
     host        = var.ssh_host
     user        = var.ssh_user
     port        = var.ssh_port
+    agent       = local.use_ssh_agent
     private_key = local.ssh_private_key
   }
 
@@ -198,6 +205,7 @@ resource "null_resource" "vpn_clients" {
     host        = var.ssh_host
     user        = var.ssh_user
     port        = var.ssh_port
+    agent       = local.use_ssh_agent
     private_key = local.ssh_private_key
   }
 

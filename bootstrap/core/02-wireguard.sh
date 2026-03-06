@@ -33,9 +33,37 @@ if [[ -f "${SCRIPT_DIR}/.env" ]]; then
   source "${SCRIPT_DIR}/.env"
 fi
 
-WG_PRIVATE_KEY="${WG_PRIVATE_KEY:-__WG_PRIVATE_KEY__}"
-WG_PEER_PUBKEY="${WG_PEER_PUBKEY:-__WG_PEER_PUBKEY__}"
 VPN_DOMAIN="${VPN_DOMAIN:-example.com}"
+
+# ── Generate or load WireGuard server keys ───────────────────────────────────
+# Keys are generated on the server if not provided (more secure: never leave server)
+generate_server_keys() {
+  log_step "Generating/loading WireGuard server keys"
+  
+  local keydir="/etc/wireguard"
+  local privkey="$keydir/private.key"
+  local pubkey="$keydir/public.key"
+  
+  mkdir -p "$keydir"
+  chmod 0700 "$keydir"
+  
+  # Generate keys if not exist
+  if [[ ! -f "$privkey" ]]; then
+    log_info "Generating new WireGuard server keypair..."
+    wg genkey > "$privkey"
+    chmod 0600 "$privkey"
+  fi
+  
+  if [[ ! -f "$pubkey" ]]; then
+    wg pubkey < "$privkey" > "$pubkey"
+  fi
+  
+  # Export for use in other functions
+  WG_PRIVATE_KEY="$(cat "$privkey")"
+  WG_PUBLIC_KEY="$(cat "$pubkey")"
+  
+  log_info "Server public key: ${WG_PUBLIC_KEY}"
+}
 
 # ── Disable legacy networking ───────────────────────────────────────────────
 # IMPORTANT: This is called AFTER systemd-networkd is already running!
@@ -62,37 +90,15 @@ disable_legacy_networking() {
 }
 
 # ── Install WireGuard private key ────────────────────────────────────────────
+# This function is now a no-op since generate_server_keys handles everything
 install_wireguard_key() {
   log_step "Installing WireGuard private key"
-
-  local keyfile="/etc/wireguard/private.key"
-
-  if [[ "$WG_PRIVATE_KEY" == "__WG_PRIVATE_KEY__" ]]; then
-    log_fatal "WG_PRIVATE_KEY not set — cannot configure WireGuard"
+  
+  # Keys are already generated/loaded by generate_server_keys()
+  if [[ -z "${WG_PRIVATE_KEY:-}" ]]; then
+    log_fatal "WG_PRIVATE_KEY not set — generate_server_keys() must be called first"
   fi
-
-  if [[ "$DRY_RUN" == "true" ]]; then
-    log_info "Would install WireGuard private key to $keyfile"
-    return 0
-  fi
-
-  mkdir -p /etc/wireguard
-  chmod 0700 /etc/wireguard
-
-  # Only write if changed (avoid unnecessary disk writes of secret material)
-  if [[ -f "$keyfile" ]]; then
-    local current
-    current="$(cat "$keyfile")"
-    if [[ "$current" == "$WG_PRIVATE_KEY" ]]; then
-      log_info "WireGuard private key already installed"
-      chmod 0600 "$keyfile"
-      return 0
-    fi
-  fi
-
-  printf '%s\n' "$WG_PRIVATE_KEY" > "$keyfile"
-  chmod 0600 "$keyfile"
-  chown root:root "$keyfile"
+  
   log_info "WireGuard private key installed"
 }
 
@@ -133,12 +139,8 @@ configure_wg_netdev() {
 
   local netdev="/etc/systemd/network/99-wg0.netdev"
 
-  if [[ "$WG_PEER_PUBKEY" == "__WG_PEER_PUBKEY__" ]]; then
-    log_fatal "WG_PEER_PUBKEY not set — cannot configure WireGuard peer"
-  fi
-
-  if [[ "$WG_PRIVATE_KEY" == "__WG_PRIVATE_KEY__" ]]; then
-    log_fatal "WG_PRIVATE_KEY not set — cannot configure WireGuard"
+  if [[ -z "${WG_PRIVATE_KEY:-}" ]]; then
+    log_fatal "WG_PRIVATE_KEY not set — generate_server_keys() must be called first"
   fi
 
   # systemd-networkd creates the WireGuard interface and manages its lifecycle.
@@ -146,6 +148,7 @@ configure_wg_netdev() {
   # because systemd-networkd on Debian runs as user systemd-network and cannot
   # read 0600 root:root files. The .netdev file itself is 0640 root:systemd-network.
   # ListenPort 51820 is the ONLY port exposed on WAN (enforced by nftables).
+  # NOTE: No peers here - vpn-client.sh adds them after bootstrap
   local content
   content="$(cat <<NETDEV
 [NetDev]
@@ -155,16 +158,13 @@ Kind=wireguard
 [WireGuard]
 ListenPort=51820
 PrivateKey=${WG_PRIVATE_KEY}
-
-[WireGuardPeer]
-PublicKey=${WG_PEER_PUBKEY}
-AllowedIPs=10.100.0.2/32
 NETDEV
 )"
 
-  if file_matches "$netdev" "$content"; then
-    log_info "WireGuard netdev config already up to date"
-    # Ensure permissions are correct even if content matches
+  # Only write if netdev doesn't exist (preserve existing peers added by vpn-client.sh)
+  if [[ -f "$netdev" ]]; then
+    log_info "WireGuard netdev already exists, preserving peer configuration"
+    # Ensure permissions are correct
     chmod 0640 "$netdev" 2>/dev/null || true
     chown root:systemd-network "$netdev" 2>/dev/null || true
     return 0
@@ -448,11 +448,13 @@ main() {
   require_root
 
   # CRITICAL ORDER:
-  # 1. Install configs FIRST (while legacy networking still works)
-  # 2. Start systemd-networkd (takes over interfaces)
-  # 3. Create boot service for wg0 reliability
-  # 4. THEN disable legacy networking (safe because networkd is running)
+  # 1. Generate server keys (if not exist)
+  # 2. Install configs FIRST (while legacy networking still works)
+  # 3. Start systemd-networkd (takes over interfaces)
+  # 4. Create boot service for wg0 reliability
+  # 5. THEN disable legacy networking (safe because networkd is running)
   
+  generate_server_keys      # Generate or load WireGuard server keypair
   install_wireguard_key
   configure_wan
   configure_wg_netdev

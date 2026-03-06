@@ -138,7 +138,7 @@ cmd_add() {
   server_pubkey=$(get_server_pubkey)
   server_endpoint=$(get_server_endpoint)
   
-  # Generate client config
+  # Generate client config (Split-Tunnel: only VPN subnet routed through VPN)
   cat > "${client_dir}/client.conf" <<EOF
 # WireGuard Config: ${name}
 # Generated: $(date -Iseconds)
@@ -152,7 +152,7 @@ DNS = ${DNS_SERVER}
 PublicKey = ${server_pubkey}
 PresharedKey = ${psk}
 Endpoint = ${server_endpoint}
-AllowedIPs = 0.0.0.0/0, ::/0
+AllowedIPs = ${VPN_SUBNET}.0/24
 PersistentKeepalive = 25
 EOF
   chmod 600 "${client_dir}/client.conf"
@@ -170,8 +170,9 @@ PresharedKey=${psk}
 AllowedIPs=${client_ip}/32
 EOF
   
-  # Reload systemd-networkd
-  networkctl reload 2>/dev/null || systemctl restart systemd-networkd
+  # Restart systemd-networkd (reload is unreliable for adding peers)
+  systemctl restart systemd-networkd
+  sleep 2
   
   log "Client '$name' created: ${client_ip}"
   log "Config: ${client_dir}/client.conf"
@@ -199,8 +200,9 @@ cmd_remove() {
   # Remove client directory
   rm -rf "$client_dir"
   
-  # Reload systemd-networkd
-  networkctl reload 2>/dev/null || systemctl restart systemd-networkd
+  # Restart systemd-networkd (reload is unreliable for removing peers)
+  systemctl restart systemd-networkd
+  sleep 2
   
   log "Client '$name' removed"
 }

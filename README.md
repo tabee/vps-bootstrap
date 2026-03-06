@@ -101,35 +101,15 @@ Dann auf dem OpenClaw-VPS die WireGuard-Config installieren und SSH-Key für `ad
 
 ---
 
-### 📋 TODO: SSH-CLI für alle Services (Zero-Credential-Agents)
+### 📋 TODO
 
-**Ziel:** KI-Agenten sollen *niemals* API-Tokens oder Credentials sehen.
+| Service | Tool | Status |
+|---------|------|--------|
+| Google Workspace | `gog` (gogcli) | ✅ Fertig |
+| Gitea | `tea` CLI | 🔧 Geplant |
+| n8n | Built-in CLI | 🔧 Geplant |
 
-- fehlt: apt update && apt install -y git
-
-**Aktueller Stand:**
-
-| Service | Tool | LLM sieht Credentials? | Status |
-|---------|------|------------------------|--------|
-| Google Workspace | `gog` (gogcli) | ❌ Nein | ✅ Fertig |
-| Gitea | `tea` (offiziell) | ❌ Nein | 🔧 TODO |
-| n8n | Built-in CLI | ❌ Nein | 🔧 TODO |
-| PostgreSQL | `psql --json` (PG16+) | ❌ Nein | 🔧 TODO |
-
-**Geplante Umsetzung mit etablierten Tools:**
-
-```bash
-# Gitea: tea (offizielle CLI von Gitea)
-# Token wird einmalig auf VPS hinterlegt, nicht im Agent-Prompt
-ssh admin@10.100.0.1 "tea issues list myorg/repo --output json"
-ssh admin@10.100.0.1 "tea pulls create --title 'Fix' --output json"
-
-# n8n: Built-in CLI (bereits in n8n enthalten)
-ssh admin@10.100.0.1 "n8n-cli list:workflow"
-ssh admin@10.100.0.1 "n8n-cli execute --id 5"
-
-# PostgreSQL: Natives JSON seit PG16
-ssh admin@10.100.0.1 "psql -d gitea --json -c 'SELECT * FROM issue LIMIT 10'"
+---
 
 ## Voraussetzungen
 
@@ -167,6 +147,7 @@ brew install terraform
 curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
 sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
 sudo apt-get update && sudo apt-get install terraform
+terraform --version
 
 # Oder: https://terraform.io/downloads
 ```
@@ -174,6 +155,21 @@ sudo apt-get update && sudo apt-get install terraform
 ---
 
 ## Installation
+
+> **Wichtig:** Terraform wird auf deinem **lokalen Rechner** (Client) ausgeführt, nicht auf dem VPS! Terraform verbindet sich per SSH zum Server und richtet diesen remote ein.
+
+### SSH-Agent vorbereiten (bei Passphrase-geschütztem Key)
+
+```bash
+# SSH-Agent starten
+eval "$(ssh-agent -s)"
+
+# Key hinzufügen (Passphrase wird einmalig abgefragt)
+ssh-add ~/.ssh/id_ed25519
+
+# Prüfen ob Key geladen
+ssh-add -l
+```
 
 ### Schritt 1: Repository klonen
 
@@ -193,7 +189,7 @@ cp terraform.tfvars.example terraform.tfvars
 ```hcl
 # PFLICHT - Ohne diese geht nichts
 ssh_host             = "123.45.67.89"        # IP aus Hetzner Console
-ssh_private_key_path = "~/.ssh/id_ed25519"   # Pfad zu deinem SSH-Key
+ssh_private_key_path = ""                    # Leer = SSH-Agent nutzen
 domain               = "example.com"          # Deine Domain
 hetzner_dns_token    = "xxx"                  # DNS API Token
 acme_email           = "du@example.com"       # E-Mail für Let's Encrypt
@@ -256,7 +252,7 @@ curl -k https://whoami.example.com
 | Variable | Pflicht | Default | Beschreibung |
 |----------|:-------:|---------|--------------|
 | `ssh_host` | ✓ | - | IP-Adresse des Servers |
-| `ssh_private_key_path` | ✓ | - | Pfad zu deinem SSH-Key |
+| `ssh_private_key_path` | | - | Pfad zum SSH-Key (leer = SSH-Agent) |
 | `domain` | ✓ | - | Deine Domain |
 | `hetzner_dns_token` | ✓ | - | Hetzner DNS API Token |
 | `acme_email` | ✓ | - | E-Mail für Let's Encrypt |
