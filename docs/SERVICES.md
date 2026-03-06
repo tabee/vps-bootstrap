@@ -1,318 +1,188 @@
 # Optional Services
 
-This document describes the optional services that can be enabled in `terraform.tfvars`.
-
-All services are:
-- 🔒 Only accessible via WireGuard VPN
-- 🔐 HTTPS with automatic Let's Encrypt certificates
-- 🐳 Running in Docker containers (except gogcli)
-
----
+All services run as Docker containers behind Traefik reverse proxy with automatic HTTPS.
 
 ## Quick Reference
 
-| Service | Enable Flag | URL | Purpose |
-|---------|-------------|-----|---------|
-| Gitea | `enable_gitea = true` | https://git.domain.com | Git server |
-| n8n | `enable_n8n = true` | https://n8n.domain.com | Workflow automation |
-| whoami | `enable_whoami = true` | https://whoami.domain.com | Test service |
-| gogcli | `enable_gogcli = true` | SSH only | Google Workspace CLI |
+| Service | Port | URL | Enable Variable |
+|---------|------|-----|-----------------|
+| Gitea | 3000 | `https://gitea.DOMAIN` | `install_gitea = true` |
+| n8n | 5678 | `https://n8n.DOMAIN` | `install_n8n = true` |
+| whoami | 80 | `https://whoami.DOMAIN` | `install_whoami = true` |
+| gogcli | - | CLI tool | `install_gogcli = true` |
 
 ---
 
-## Gitea (Git Server)
+## Gitea
 
-Self-hosted Git server with web UI, API, and SSH access.
+Lightweight Git server with web interface.
 
-### Enable
+### Configuration
 
 ```hcl
-# terraform.tfvars
-enable_gitea = true
+install_gitea = true
+gitea_version = "1.23"  # Optional, default: 1.23
 ```
 
 ### Access
 
-| Method | URL/Command |
-|--------|-------------|
-| Web UI | https://git.your-domain.com |
-| Git SSH | `git clone ssh://git@git.your-domain.com:2222/user/repo.git` |
-| API | https://git.your-domain.com/api/v1/ |
+- URL: `https://gitea.YOUR_DOMAIN`
+- First user registered becomes admin
+- Data stored in: `/opt/gitea/`
 
-### First Setup
+### SSH Clone
 
-1. Open https://git.your-domain.com
-2. Create admin account (first user becomes admin)
-3. Configure settings in admin panel
-
-### Credentials
+Uses port 2222 to avoid conflict with system SSH:
 
 ```bash
-# Show database password and secret key
-terraform output -json credentials | jq '.gitea'
-```
-
-### API Access (for AI Agents)
-
-```bash
-# Create access token in Gitea UI: Settings → Applications → Generate Token
-
-# Example: Create issue
-curl -H "Authorization: token YOUR_TOKEN" \
-  https://git.your-domain.com/api/v1/repos/user/repo/issues \
-  -d '{"title": "Bug report", "body": "Description here"}'
+git clone ssh://git@YOUR_DOMAIN:2222/user/repo.git
 ```
 
 ---
 
-## n8n (Workflow Automation)
+## n8n
 
-Low-code workflow automation platform. Connect services, automate tasks.
+Workflow automation platform (self-hosted Zapier alternative).
 
-### Enable
+### Configuration
 
 ```hcl
-# terraform.tfvars
-enable_n8n = true
+install_n8n = true
+n8n_version = "latest"  # Optional, default: latest
 ```
 
 ### Access
 
-| Method | URL |
-|--------|-----|
-| Web UI | https://n8n.your-domain.com |
-| Webhook | https://n8n.your-domain.com/webhook/... |
+- URL: `https://n8n.YOUR_DOMAIN`
+- Create account on first visit
+- Data stored in: `/opt/n8n/`
 
-### First Setup
+### Security Note
 
-1. Open https://n8n.your-domain.com
-2. Create account (first user becomes admin)
-3. Start building workflows
-
-### Credentials
-
-```bash
-# Show database password and encryption key
-terraform output -json credentials | jq '.n8n'
-```
-
-### Use Cases
-
-- Webhook receivers (GitHub, Stripe, etc.)
-- Scheduled tasks (cron-like)
-- API integrations
-- Data transformations
+n8n is exposed to the internet. Consider restricting access via additional Traefik middleware if needed.
 
 ---
 
-## whoami (Test Service)
+## whoami
 
-Simple test container that returns request information. Useful for verifying Traefik and DNS setup.
+Simple diagnostic container that echoes HTTP request headers. Useful for testing Traefik routing.
 
-### Enable
+### Configuration
 
 ```hcl
-# terraform.tfvars
-enable_whoami = true  # This is the default
+install_whoami = true
 ```
 
 ### Access
 
-```bash
-# Via VPN
-curl https://whoami.your-domain.com
-```
+- URL: `https://whoami.YOUR_DOMAIN`
+- Shows: IP, headers, hostname
 
-### Expected Output
+---
 
-```
-Hostname: whoami-container-id
-IP: 10.20.0.x
-RemoteAddr: 10.20.0.1:xxxxx
-GET / HTTP/1.1
-Host: whoami.your-domain.com
-...
-```
+## gogcli
 
-### Disable After Testing
+GOG.com command-line download client. Installed as binary, not a container.
+
+### Configuration
 
 ```hcl
-# terraform.tfvars
-enable_whoami = false
+install_gogcli   = true
+gogcli_version   = "1.1.3"  # Optional, default: 1.1.3
 ```
 
+### Usage
+
+SSH into server and run:
+
 ```bash
-terraform apply
+# Authenticate (one-time)
+gog login
+
+# List games
+gog owned
+
+# Download a game
+gog download <game-id> --output /path/to/downloads
+```
+
+### Binary Location
+
+- `/usr/local/bin/gog`
+
+---
+
+## Adding Services
+
+Custom services should follow this pattern:
+
+1. Create `bootstrap/services/your-service.sh`
+2. Add variables to `variables.tf` and `terraform.tfvars.example`
+3. Add conditional call in `main.tf`
+
+### Template
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+SERVICE_NAME="myservice"
+SERVICE_VERSION="${1:-latest}"
+DOMAIN="${2}"
+
+# Create directories
+mkdir -p /opt/"$SERVICE_NAME"
+
+# Create docker-compose.yml
+cat > /opt/"$SERVICE_NAME"/docker-compose.yml << EOF
+services:
+  $SERVICE_NAME:
+    image: myimage:$SERVICE_VERSION
+    container_name: $SERVICE_NAME
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.$SERVICE_NAME.rule=Host(\`$SERVICE_NAME.$DOMAIN\`)"
+      - "traefik.http.routers.$SERVICE_NAME.entrypoints=websecure"
+      - "traefik.http.routers.$SERVICE_NAME.tls.certresolver=letsencrypt"
+    networks:
+      - traefik
+
+networks:
+  traefik:
+    external: true
+EOF
+
+cd /opt/"$SERVICE_NAME" && docker compose up -d
 ```
 
 ---
 
-## gogcli (Google Workspace CLI)
+## Troubleshooting
 
-CLI tool for Gmail, Drive, Calendar, Sheets, etc. **No HTTP endpoint** — access exclusively via SSH.
-
-### Enable
-
-```hcl
-# terraform.tfvars
-enable_gogcli = true
-```
-
-### Security Model
-
-Unlike other services, gogcli has **no web interface**. Access is via SSH only:
+### Service not accessible?
 
 ```bash
-# From your local machine (via VPN):
-ssh admin@10.100.0.1 "gog gmail search 'is:unread' --json"
+# Check container status
+docker ps -a | grep SERVICE_NAME
 
-# From another VPS (e.g., OpenClaw AI agent):
-ssh admin@10.100.0.1 "gog drive list --json"
+# View logs
+docker logs SERVICE_NAME
+
+# Check Traefik routing
+docker logs traefik 2>&1 | grep SERVICE_NAME
 ```
 
-This means:
-- ✅ OAuth tokens stay on the VPS
-- ✅ AI agents see only JSON responses
-- ✅ No credentials exposed to LLMs
-
-### Setup
-
-1. **Create Google OAuth Credentials:**
-   - [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
-   - Create OAuth 2.0 Client ID → "Desktop app"
-   - Download JSON file
-
-2. **Copy credentials to server:**
-   ```bash
-   scp client_secret_*.json admin@10.100.0.1:/opt/gogcli/
-   ```
-
-3. **Authorize (once per Google account):**
-   ```bash
-   ssh admin@10.100.0.1
-   gog auth credentials /opt/gogcli/client_secret_*.json
-   gog auth add your@gmail.com
-   # Follow the authorization URL
-   ```
-
-4. **Test:**
-   ```bash
-   gog gmail labels list
-   gog drive list
-   gog calendar events --days 7
-   ```
-
-### Available Services
-
-| Service | Example Command |
-|---------|-----------------|
-| `gmail` | `gog gmail search 'is:unread' --max 10 --json` |
-| `drive` | `gog drive list --json` |
-| `calendar` | `gog calendar events --days 7 --json` |
-| `sheets` | `gog sheets get SPREADSHEET_ID` |
-| `docs` | `gog docs list` |
-| `contacts` | `gog contacts list` |
-| `tasks` | `gog tasks list` |
-
-### Use with AI Agents
-
-Perfect for AI agents that need Google Workspace access without credential exposure:
+### Certificate issues?
 
 ```bash
-# Agent executes via SSH (SSH key on agent's server, not in LLM):
-ssh admin@10.100.0.1 "gog gmail search 'from:boss@company.com' --max 5 --json"
-
-# LLM sees only:
-[{"id": "abc123", "subject": "Meeting tomorrow", "from": "boss@company.com"}]
-
-# LLM does NOT see:
-# • Google OAuth Client Secret
-# • Google Access/Refresh Tokens
-# • SSH Private Key
+# Check ACME log
+cat /opt/traefik/acme.json | jq '.letsencrypt.Certificates[].domain'
 ```
 
----
-
-## Credentials Management
-
-All service passwords are auto-generated by Terraform:
+### Port conflicts?
 
 ```bash
-# Show all credentials
-terraform output -json credentials | jq
-
-# Specific service
-terraform output -json credentials | jq '.gitea'
-terraform output -json credentials | jq '.n8n'
-terraform output -json credentials | jq '.gogcli'
-```
-
-⚠️ **Store these credentials securely (e.g., password manager)!**
-
----
-
-## Enable/Disable Services
-
-### Enable a Service
-
-```hcl
-# terraform.tfvars
-enable_n8n = true
-```
-
-```bash
-terraform apply
-```
-
-### Disable a Service
-
-```hcl
-# terraform.tfvars
-enable_n8n = false
-```
-
-```bash
-terraform apply
-```
-
-This will:
-1. Stop and remove Docker containers
-2. Keep data volumes (for potential re-enable)
-
-### Completely Remove Service Data
-
-```bash
-ssh admin@10.100.0.1
-sudo -i
-docker volume rm n8n_data  # or gitea_data, etc.
-```
-
----
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  VPN Clients (10.100.0.0/24)                                │
-│       │                                                     │
-│       ▼                                                     │
-│  ┌────────────────────────────────────────────────────────┐ │
-│  │  Traefik (Reverse Proxy)                               │ │
-│  │    ├── git.domain.com  → Gitea (10.20.0.30)           │ │
-│  │    ├── n8n.domain.com  → n8n (10.20.0.40)             │ │
-│  │    └── whoami.domain.com → whoami (10.20.0.x)         │ │
-│  └────────────────────────────────────────────────────────┘ │
-│       │                                                     │
-│       │ Not via Traefik:                                   │
-│       │                                                     │
-│  ┌────────────────────────────────────────────────────────┐ │
-│  │  SSH (Port 22, VPN only)                               │ │
-│  │    └── gog command → gogcli binary                     │ │
-│  └────────────────────────────────────────────────────────┘ │
-│       │                                                     │
-│  ┌────────────────────────────────────────────────────────┐ │
-│  │  Gitea SSH (Port 2222, VPN only)                       │ │
-│  │    └── git clone ssh://git@...:2222/...               │ │
-│  └────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
+# Check what's using a port
+ss -tlnp | grep :PORT
 ```
