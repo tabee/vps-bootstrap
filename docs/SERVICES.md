@@ -2,6 +2,44 @@
 
 All services run as Docker containers behind Traefik reverse proxy with automatic HTTPS.
 
+## Architecture Overview
+
+```
+                    ┌─────────────────────────────────────┐
+                    │              INTERNET               │
+                    └─────────────────────────────────────┘
+                                    │
+           ┌────────────────────────┼────────────────────────┐
+           │                        │                        │
+           ▼                        ▼                        ▼
+    HTTPS (443)              WireGuard (51820)          SSH (2222)
+           │                        │                     Gitea
+           ▼                        ▼
+    ┌─────────────┐          ┌─────────────┐
+    │   TRAEFIK   │          │  VPN ONLY   │
+    │  (public)   │          │  (private)  │
+    └─────────────┘          └─────────────┘
+           │                        │
+    ┌──────┼──────┐                 │
+    ▼      ▼      ▼                 ▼
+  Gitea   n8n  whoami           SSH → CLI
+  :3000  :5678  :80                 │
+                              ┌─────┴─────┐
+                              │  gogcli   │
+                              │  admin    │
+                              │  scripts  │
+                              └───────────┘
+```
+
+| Access | Services | Method |
+|--------|----------|--------|
+| 🌐 **Web (Public)** | Gitea, n8n, whoami | Browser → `https://service.domain` |
+| 🔒 **VPN (Private)** | gogcli, admin CLI | VPN connect → `ssh admin@10.100.0.1` |
+
+> **TODO:** CLI-Addon für direkten Service-Zugriff via VPN (ohne Browser).
+
+---
+
 ## Quick Reference
 
 | Service | Port | URL | Enable Variable |
@@ -84,6 +122,15 @@ install_whoami = true
 
 GOG.com command-line download client. Installed as binary, not a container.
 
+> ⚠️ **Access:** Nur via VPN + SSH erreichbar (kein Web-Interface).
+
+```
+┌──────────┐     VPN      ┌────────────┐     SSH      ┌─────────┐
+│  Client  │ ──────────── │  10.100.0.1│ ──────────── │ gogcli  │
+│ (lokal)  │   WireGuard  │   Server   │  admin user  │  CLI    │
+└──────────┘              └────────────┘              └─────────┘
+```
+
 ### Configuration
 
 ```hcl
@@ -93,18 +140,31 @@ gogcli_version   = "1.1.3"  # Optional, default: 1.1.3
 
 ### Usage
 
-SSH into server and run:
-
 ```bash
-# Authenticate (one-time)
+# 1. Connect VPN
+# 2. SSH into server
+ssh admin@10.100.0.1
+
+# 3. Authenticate (one-time, interactive)
 gog login
 
-# List games
-gog owned
-
-# Download a game
-gog download <game-id> --output /path/to/downloads
+# 4. Use CLI
+gog owned              # List games
+gog download <id>      # Download game
 ```
+
+### Authentication & Credentials
+
+Die Authentifizierung erfolgt interaktiv via `gog login`. Credentials werden lokal gespeichert:
+
+- **Token-Datei:** `~/.config/gog/token.json`
+- **Manifest-Cache:** `~/.cache/gog/`
+
+📖 **Vollständige Dokumentation:**
+- GitHub: [Magnushhoie/gogcli](https://github.com/Magnushhoie/gogcli)
+- Auth-Details: [gogcli Wiki – Authentication](https://github.com/Magnushhoie/gogcli#authentication)
+
+> **Tipp:** Für automatisierte Downloads (Cronjobs) kann das Token manuell in `~/.config/gog/token.json` hinterlegt werden.
 
 ### Binary Location
 
