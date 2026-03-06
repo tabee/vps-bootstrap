@@ -5,7 +5,7 @@
 Creates a hardened Debian 12 server with:
 - 🔐 WireGuard VPN (only access method after installation)
 - 🌐 Automatic HTTPS certificates (Let's Encrypt via Hetzner DNS)
-- 🐳 Docker-based services (optional: Gitea, n8n, gogcli)
+- 🐳 Docker-based services (see [docs/SERVICES.md](docs/SERVICES.md))
 - 🛡️ Firewall, Fail2ban, automatic security updates
 
 ---
@@ -101,13 +101,15 @@ Then install the WireGuard config on the OpenClaw-VPS and add SSH key for `admin
 
 ---
 
-### 📋 TODO
+### 📋 Service Integration TODO
 
-| Service | Tool | Status |
-|---------|------|--------|
+| Service | CLI Tool | Status |
+|---------|----------|--------|
 | Google Workspace | `gog` (gogcli) | ✅ Done |
 | Gitea | `tea` CLI | 🔧 Planned |
 | n8n | Built-in CLI | 🔧 Planned |
+
+**Service documentation:** [docs/SERVICES.md](docs/SERVICES.md)
 
 ---
 
@@ -256,12 +258,19 @@ curl -k https://whoami.example.com
 | `domain` | ✓ | - | Your domain |
 | `hetzner_dns_token` | ✓ | - | Hetzner DNS API Token |
 | `acme_email` | ✓ | - | Email for Let's Encrypt |
-| `enable_gitea` | | `false` | Git server (git.domain.com) |
-| `enable_n8n` | | `false` | Workflow tool (n8n.domain.com) |
-| `enable_whoami` | | `true` | Test service (whoami.domain.com) |
-| `enable_gogcli` | | `false` | Google Workspace CLI (via SSH) |
 | `vpn_clients` | | `["admin"]` | List of VPN clients |
 | `admin_user` | | `"admin"` | SSH username after hardening |
+
+### Optional Services
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `enable_gitea` | `false` | Git server (git.domain.com) |
+| `enable_n8n` | `false` | Workflow tool (n8n.domain.com) |
+| `enable_whoami` | `true` | Test service (whoami.domain.com) |
+| `enable_gogcli` | `false` | Google Workspace CLI (via SSH) |
+
+**Full service documentation:** [docs/SERVICES.md](docs/SERVICES.md)
 
 ---
 
@@ -299,57 +308,14 @@ ssh admin@10.100.0.1 'sudo /opt/vps/bootstrap/scripts/vpn-client.sh list'
 
 ## gogcli (Google Workspace CLI)
 
-With `enable_gogcli = true`, [gogcli](https://gogcli.sh) is installed - a CLI for Gmail, Calendar, Drive, Sheets, etc.
+With `enable_gogcli = true`, [gogcli](https://gogcli.sh) is integrated.
 
-### Security Model
+**Full documentation:** [docs/SERVICES.md](docs/SERVICES.md#gogcli-google-workspace-cli)
 
-**No HTTP endpoint.** Access exclusively via SSH:
-
+Quick test after setup:
 ```bash
-# From your local machine (via VPN):
-ssh admin@10.100.0.1 "gog gmail search 'is:unread' --json"
-
-# From another VPS (e.g., OpenClaw):
-ssh admin@10.100.0.1 "gog drive list --json"
+ssh admin@10.100.0.1 "gog gmail labels list"
 ```
-
-### Setup
-
-1. **Create Google OAuth Credentials:**
-   - [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
-   - OAuth 2.0 Client ID → "Desktop app"
-   - Download JSON file
-
-2. **Copy credentials to server:**
-   ```bash
-   scp client_secret_*.json admin@10.100.0.1:/opt/gogcli/
-   ```
-
-3. **Authorize (once):**
-   ```bash
-   ssh admin@10.100.0.1
-   gog auth credentials /opt/gogcli/client_secret_*.json
-   gog auth add your@gmail.com
-   ```
-
-4. **Test:**
-   ```bash
-   gog gmail labels list
-   gog drive list
-   gog calendar events --days 7
-   ```
-
-### Available Services
-
-| Service | Example Command |
-|---------|-----------------|
-| `gmail` | `gog gmail search 'is:unread' --max 10` |
-| `drive` | `gog drive list --json` |
-| `calendar` | `gog calendar events --days 7` |
-| `sheets` | `gog sheets get SPREADSHEET_ID` |
-| `docs` | `gog docs list` |
-| `contacts` | `gog contacts list` |
-| `tasks` | `gog tasks list` |
 
 ---
 
@@ -424,6 +390,8 @@ This server is maximally hardened after installation:
 
 ## What Gets Installed?
 
+### Core (always installed)
+
 | Component | Purpose | Port |
 |-----------|---------|------|
 | WireGuard | VPN tunnel | UDP 51820 (only public port!) |
@@ -432,10 +400,17 @@ This server is maximally hardened after installation:
 | Traefik | Reverse proxy + HTTPS | 443 (VPN only) |
 | Fail2ban | Brute-force protection | - |
 | Unattended Upgrades | Auto-updates | - |
-| (optional) Gitea | Git server | 2222 (SSH, VPN only) |
-| (optional) n8n | Workflow automation | - |
-| (optional) whoami | Test service | - |
-| (optional) gogcli | Google Workspace CLI | via SSH |
+
+### Optional Services
+
+See [docs/SERVICES.md](docs/SERVICES.md) for configuration and usage.
+
+| Component | Enable Flag | Purpose |
+|-----------|-------------|---------|
+| Gitea | `enable_gitea` | Git server (SSH port 2222) |
+| n8n | `enable_n8n` | Workflow automation |
+| whoami | `enable_whoami` | Test service |
+| gogcli | `enable_gogcli` | Google Workspace CLI |
 
 ---
 
@@ -454,20 +429,21 @@ This server is maximally hardened after installation:
 │       ▼ Only accessible via VPN                            │
 │  ┌────────────────────────────────────────────────────────┐ │
 │  │  Docker (10.20.0.0/24)                                 │ │
-│  │    ├── Traefik (443) ─→ git.*, n8n.*, whoami.*        │ │
-│  │    ├── Gitea (optional)                                │ │
-│  │    ├── n8n (optional)                                  │ │
-│  │    └── whoami (optional)                               │ │
+│  │    ├── Traefik (443) → Reverse Proxy + HTTPS          │ │
+│  │    └── Services (Gitea, n8n, whoami, ...)             │ │
 │  └────────────────────────────────────────────────────────┘ │
 │       │                                                     │
-│       │ SSH                                                 │
+│       │ SSH (VPN only)                                     │
 │       ▼                                                     │
 │  ┌────────────────────────────────────────────────────────┐ │
-│  │  gogcli (optional, no Docker!)                          │ │
-│  │    └── /usr/local/bin/gog → Gmail, Drive, Calendar...  │ │
+│  │  System                                                 │ │
+│  │    ├── admin user (sudo -i)                            │ │
+│  │    └── gogcli (optional)                               │ │
 │  └────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+**Service details:** [docs/SERVICES.md](docs/SERVICES.md)
 
 ---
 
