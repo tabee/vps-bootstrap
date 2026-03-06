@@ -137,8 +137,11 @@ cmd_add() {
   server_pubkey=$(get_server_pubkey)
   server_endpoint=$(get_server_endpoint)
   
-  # Generate client config (Split-Tunnel: only VPN subnet routed through VPN)
-  # DNS points to VPN gateway (dnsmasq) which resolves *.domain → Traefik
+  # Generate client config (Split-Tunnel: VPN + Docker subnets routed through VPN)
+  # DNS points to VPN gateway (dnsmasq) which resolves *.domain → Traefik (10.20.0.10)
+  # AllowedIPs includes both:
+  #   - 10.100.0.0/24 (VPN subnet) for SSH to admin@10.100.0.1
+  #   - 10.20.0.0/24 (Docker subnet) for Traefik and services
   cat > "${client_dir}/client.conf" <<EOF
 # WireGuard Config: ${name}
 # Generated: $(date -Iseconds)
@@ -152,7 +155,7 @@ DNS = ${VPN_SUBNET}.1
 PublicKey = ${server_pubkey}
 PresharedKey = ${psk}
 Endpoint = ${server_endpoint}
-AllowedIPs = ${VPN_SUBNET}.0/24
+AllowedIPs = ${VPN_SUBNET}.0/24, 10.20.0.0/24
 PersistentKeepalive = 25
 EOF
   chmod 600 "${client_dir}/client.conf"
