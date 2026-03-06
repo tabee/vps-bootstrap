@@ -365,6 +365,46 @@ UNIT
   fi
 }
 
+# ── Create admin user ────────────────────────────────────────────────────────
+# Creates admin user with sudo access and copies SSH keys from root
+create_admin_user() {
+  log_step "Creating admin user"
+
+  local admin_user="${ADMIN_USER:-admin}"
+
+  # Create user if not exists
+  if id "$admin_user" &>/dev/null; then
+    log_info "Admin user '$admin_user' already exists"
+  else
+    useradd -m -s /bin/bash "$admin_user"
+    log_info "Created admin user: $admin_user"
+  fi
+
+  # Add to sudo group
+  usermod -aG sudo "$admin_user"
+
+  # Configure passwordless sudo
+  echo "$admin_user ALL=(ALL) NOPASSWD:ALL" > "/etc/sudoers.d/99-$admin_user"
+  chmod 440 "/etc/sudoers.d/99-$admin_user"
+  log_info "Configured passwordless sudo for $admin_user"
+
+  # Copy SSH keys from root
+  local admin_home
+  admin_home="$(getent passwd "$admin_user" | cut -d: -f6)"
+  local admin_ssh="${admin_home}/.ssh"
+
+  if [[ -f /root/.ssh/authorized_keys ]]; then
+    mkdir -p "$admin_ssh"
+    cp /root/.ssh/authorized_keys "$admin_ssh/authorized_keys"
+    chown -R "$admin_user:$admin_user" "$admin_ssh"
+    chmod 700 "$admin_ssh"
+    chmod 600 "$admin_ssh/authorized_keys"
+    log_info "Copied SSH keys from root to $admin_user"
+  else
+    log_warn "No SSH keys found for root - admin user will have no SSH access"
+  fi
+}
+
 # ── Main ─────────────────────────────────────────────────────────────────────
 main() {
   module_start "$BOOTSTRAP_MODULE"
@@ -376,6 +416,7 @@ main() {
   configure_hostname
   configure_sysctl
   configure_ssh
+  create_admin_user         # Create admin user with SSH keys
   configure_docker_bridge_sysctl
   configure_unattended_upgrades
 

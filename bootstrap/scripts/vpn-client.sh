@@ -31,7 +31,8 @@ SERVER_CONF="${WG_DIR}/server.conf"
 # Default values (can be overridden by server.conf)
 SERVER_PORT=51820
 VPN_SUBNET="10.100.0"
-DNS_SERVER="${VPN_SUBNET}.1"
+# Use public DNS for split-tunnel VPN (10.100.0.1 has no DNS server)
+DNS_SERVER="1.1.1.1, 9.9.9.9"
 
 # Load server config if exists
 if [[ -f "$SERVER_CONF" ]]; then
