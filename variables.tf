@@ -3,16 +3,16 @@
 # =============================================================================
 
 # ═══════════════════════════════════════════════════════════════════════════
-# PFLICHT - Ohne diese geht nichts
+# REQUIRED - Must be set
 # ═══════════════════════════════════════════════════════════════════════════
 
 variable "ssh_host" {
-  description = "IP-Adresse des Servers (aus Hetzner Console)"
+  description = "Server IP address (from Hetzner Console)"
   type        = string
 }
 
 variable "ssh_private_key_path" {
-  description = "Pfad zum SSH Private Key (z.B. ~/.ssh/id_ed25519)"
+  description = "Path to SSH private key (e.g. ~/.ssh/id_ed25519)"
   type        = string
   default     = ""
 }
@@ -25,18 +25,18 @@ variable "ssh_private_key" {
 }
 
 variable "domain" {
-  description = "Deine Domain (z.B. example.com)"
+  description = "Your domain (e.g. example.com)"
   type        = string
 }
 
 variable "hetzner_dns_token" {
-  description = "Hetzner DNS API Token für Let's Encrypt DNS-01 Challenge"
+  description = "Hetzner DNS API token for Let's Encrypt DNS-01 challenge"
   type        = string
   sensitive   = true
 }
 
 variable "acme_email" {
-  description = "E-Mail für Let's Encrypt Benachrichtigungen"
+  description = "Email for Let's Encrypt notifications"
   type        = string
 }
 
@@ -57,29 +57,29 @@ variable "ssh_port" {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
-# SERVICES - Ein/Ausschalten
+# SERVICES - Enable/Disable
 # ═══════════════════════════════════════════════════════════════════════════
 
 variable "enable_gitea" {
-  description = "Git-Server installieren? (git.domain.com)"
+  description = "Install Git server? (git.domain.com)"
   type        = bool
   default     = false
 }
 
 variable "enable_n8n" {
-  description = "Workflow-Automation installieren? (n8n.domain.com)"
+  description = "Install workflow automation? (n8n.domain.com)"
   type        = bool
   default     = false
 }
 
 variable "enable_whoami" {
-  description = "Test-Service installieren? (whoami.domain.com)"
+  description = "Install test service? (whoami.domain.com)"
   type        = bool
   default     = true
 }
 
 variable "enable_gogcli" {
-  description = "Google Workspace CLI API? (gog.domain.com)"
+  description = "Install Google Workspace CLI API? (gog.domain.com)"
   type        = bool
   default     = false
 }
@@ -89,7 +89,7 @@ variable "enable_gogcli" {
 # ═══════════════════════════════════════════════════════════════════════════
 
 variable "vpn_clients" {
-  description = "Liste der VPN-Clients - entfernte Clients werden gelöscht"
+  description = "List of VPN clients - removed clients will be deleted"
   type        = list(string)
   default     = ["admin"]
 }
@@ -99,7 +99,7 @@ variable "vpn_clients" {
 # ═══════════════════════════════════════════════════════════════════════════
 
 variable "admin_user" {
-  description = "Username für SSH-Zugang nach Härtung"
+  description = "Username for SSH access after hardening"
   type        = string
   default     = "admin"
 }

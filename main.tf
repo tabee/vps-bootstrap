@@ -95,7 +95,7 @@ EOT
 
   bootstrap_command = var.skip_harden ? "sudo bash ${var.repo_path}/bootstrap/apply.sh --skip-harden" : "sudo bash ${var.repo_path}/bootstrap/apply.sh"
   
-  # SSH-Agent nutzen wenn kein expliziter Key angegeben
+  # Use SSH-Agent when no explicit key is provided
   use_ssh_agent   = var.ssh_private_key == "" && var.ssh_private_key_path == ""
   ssh_private_key = local.use_ssh_agent ? null : (var.ssh_private_key != "" ? var.ssh_private_key : file(var.ssh_private_key_path))
 }

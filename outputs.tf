@@ -3,18 +3,18 @@
 # =============================================================================
 
 # ═══════════════════════════════════════════════════════════════════════════
-# ZUGANG - Das brauchst du nach der Installation
+# ACCESS - Connection info after installation
 # ═══════════════════════════════════════════════════════════════════════════
 
 output "access" {
-  description = "Zugangsdaten nach Installation"
+  description = "Access credentials after installation"
   sensitive   = true
   value = {
     ssh = {
-      hint       = "Nach Härtung nur über VPN erreichbar!"
+      hint       = "After hardening only accessible via VPN!"
       command    = "ssh ${var.admin_user}@10.100.0.1"
       vpn_ip     = "10.100.0.1"
-      sudo       = "sudo -i (passwortlos)"
+      sudo       = "sudo -i (passwordless)"
     }
     vpn = {
       clients = var.vpn_clients
@@ -25,11 +25,11 @@ output "access" {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
-# CREDENTIALS - Alle generierten Passwörter
+# CREDENTIALS - All generated passwords
 # ═══════════════════════════════════════════════════════════════════════════
 
 output "credentials" {
-  description = "Alle generierten Zugangsdaten (sicher aufbewahren!)"
+  description = "All generated credentials (store securely!)"
   sensitive   = true
   value = {
     gitea = var.enable_gitea ? {
@@ -53,11 +53,11 @@ output "credentials" {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
-# SERVICES - URLs aller installierten Dienste
+# SERVICES - URLs of installed services
 # ═══════════════════════════════════════════════════════════════════════════
 
 output "services" {
-  description = "Installierte Services (nur über VPN erreichbar)"
+  description = "Installed services (only accessible via VPN)"
   value = {
     gitea  = var.enable_gitea ? "https://git.${var.domain}" : null
     n8n    = var.enable_n8n ? "https://n8n.${var.domain}" : null
@@ -71,7 +71,7 @@ output "services" {
 # ═══════════════════════════════════════════════════════════════════════════
 
 output "quick_commands" {
-  description = "Nützliche Befehle"
+  description = "Useful commands"
   value = {
     vpn_config = "terraform output -json access | jq -r '.vpn.config_cmd' | bash"
     vpn_qr     = "terraform output -json access | jq -r '.vpn.qr_cmd' | bash"

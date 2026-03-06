@@ -16,17 +16,17 @@
 #   sudo ./bootstrap/apply.sh --skip-harden # Direct: skip final hardening
 #
 # Architecture:
-#   PHASE 1: Basis-Sicherheit (sofort aktiv)
-#     01-system.sh    → Pakete, IPv6-off, Fail2ban, Admin-User
-#     02-wireguard.sh → VPN (Fluchtweg für Admin)
+#   PHASE 1: Base Security (immediately active)
+#     01-system.sh    → Packages, IPv6-off, Fail2ban, Admin-User
+#     02-wireguard.sh → VPN (escape route for Admin)
 #     03-firewall.sh  → nftables (UDP 51820 only)
 #
-#   PHASE 2: Services (nach VPN + Firewall)
+#   PHASE 2: Services (after VPN + Firewall)
 #     04-docker.sh    → Docker + vpn_net
 #     05-traefik.sh   → Reverse Proxy + TLS
 #     [Optional]      → gitea.sh, n8n.sh, whoami.sh
 #
-#   PHASE 3: Lockdown (am Ende, nach VPN-Test)
+#   PHASE 3: Lockdown (final, after VPN test)
 #     06-harden.sh    → SSH VPN-only, Root-Lockdown
 #
 # =============================================================================
@@ -86,7 +86,10 @@ export DRY_RUN
 # ── Load environment ────────────────────────────────────────────────────────
 if [[ -f "${SCRIPT_DIR}/.env" ]]; then
   # shellcheck source=/dev/null
+  # Use set -a to auto-export all variables for child processes (core modules)
+  set -a
   source "${SCRIPT_DIR}/.env"
+  set +a
 fi
 
 # Service flags (can be set in .env or environment)
@@ -162,10 +165,10 @@ main() {
   BACKUP_TIMESTAMP="$(date -u '+%Y%m%d_%H%M%S')"
   
   # ─────────────────────────────────────────────────────────────────────────
-  # PHASE 1: Basis-Sicherheit
+  # PHASE 1: Base Security
   # ─────────────────────────────────────────────────────────────────────────
   log_step "════════════════════════════════════════════════════════════════"
-  log_step "  PHASE 1: Basis-Sicherheit"
+  log_step "  PHASE 1: Base Security"
   log_step "════════════════════════════════════════════════════════════════"
   
   run_core_module "01-system"
@@ -206,17 +209,17 @@ main() {
     # VPN checkpoint: Ensure at least one peer is configured
     if ! grep -q "WireGuardPeer" /etc/systemd/network/99-wg0.netdev 2>/dev/null; then
       log_warn "╔════════════════════════════════════════════════════════════════╗"
-      log_warn "║  WARNUNG: Kein WireGuard-Client konfiguriert!                 ║"
+      log_warn "║  WARNING: No WireGuard client configured!                     ║"
       log_warn "╠════════════════════════════════════════════════════════════════╣"
-      log_warn "║  Härtung wird NICHT ausgeführt (Lockout-Schutz).             ║"
+      log_warn "║  Hardening SKIPPED (lockout protection).                      ║"
       log_warn "║                                                               ║"
-      log_warn "║  VPN-Client erstellen:                                        ║"
+      log_warn "║  Create VPN client:                                          ║"
       log_warn "║    sudo ${SCRIPT_DIR}/scripts/vpn-client.sh add admin        ║"
       log_warn "║                                                               ║"
-      log_warn "║  Config anzeigen:                                             ║"
+      log_warn "║  Show config:                                                ║"
       log_warn "║    sudo ${SCRIPT_DIR}/scripts/vpn-client.sh show admin       ║"
       log_warn "║                                                               ║"
-      log_warn "║  Nach VPN-Verbindung Härtung manuell ausführen:              ║"
+      log_warn "║  After VPN connection, run hardening manually:               ║"
       log_warn "║    sudo bash ${SCRIPT_DIR}/core/06-harden.sh                 ║"
       log_warn "╚════════════════════════════════════════════════════════════════╝"
     else

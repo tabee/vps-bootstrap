@@ -1,89 +1,89 @@
 # VPS Bootstrap
 
-**Sichere VPS-Infrastruktur mit einem Befehl.**
+**Secure VPS infrastructure with a single command.**
 
-Erstellt einen gehärteten Debian 12 Server mit:
-- 🔐 WireGuard VPN (einziger Zugang nach Installation)
-- 🌐 Automatische HTTPS-Zertifikate (Let's Encrypt via Hetzner DNS)
-- 🐳 Docker-basierte Services (optional: Gitea, n8n, gogcli)
-- 🛡️ Firewall, Fail2ban, automatische Sicherheitsupdates
+Creates a hardened Debian 12 server with:
+- 🔐 WireGuard VPN (only access method after installation)
+- 🌐 Automatic HTTPS certificates (Let's Encrypt via Hetzner DNS)
+- 🐳 Docker-based services (optional: Gitea, n8n, gogcli)
+- 🛡️ Firewall, Fail2ban, automatic security updates
 
 ---
 
-## 🤖 OpenClaw-Ready: KI-Agenten ohne Credential-Leaks
+## 🤖 OpenClaw-Ready: AI Agents Without Credential Leaks
 
-> **Dieses Setup ist speziell dafür konzipiert, dass KI-Agenten (wie [OpenClaw](https://openclaw.io)) sicher auf Services zugreifen können — ohne dass Secrets jemals an ein LLM gesendet werden.**
+> **This setup is specifically designed for AI agents (like [OpenClaw](https://openclaw.io)) to securely access services — without secrets ever being sent to an LLM.**
 
-### Das Problem
+### The Problem
 
-KI-Agenten mit LLM-Backend brauchen Zugriff auf Tools (Git, E-Mail, Kalender, Workflows). Aber:
-- Credentials im Agent-Prompt → LLM sieht sie → Sicherheitsrisiko
-- API-Keys in Agent-Config → potentiell im Training-Data
+AI agents with LLM backends need access to tools (Git, email, calendar, workflows). But:
+- Credentials in agent prompts → LLM sees them → security risk
+- API keys in agent config → potentially in training data
 
-### Die Lösung: Credentials bleiben auf dem VPS
+### The Solution: Credentials Stay on the VPS
 
 ```
 ┌─────────────────────────┐                              ┌──────────────────────────────┐
-│   OpenClaw              │                              │  Dein VPS (dieses Repo)      │
-│   (separater VPS)       │                              │                              │
+│   OpenClaw              │                              │  Your VPS (this repo)        │
+│   (separate VPS)        │                              │                              │
 │                         │                              │  ┌────────────────────────┐  │
-│  ┌───────────────────┐  │   WireGuard VPN (10.100.x)   │  │ 🔒 Credentials hier:   │  │
-│  │ KI-Agent + LLM    │  │ ◄────────────────────────────┤  │                        │  │
+│  ┌───────────────────┐  │   WireGuard VPN (10.100.x)   │  │ 🔒 Credentials here:   │  │
+│  │ AI Agent + LLM    │  │ ◄────────────────────────────┤  │                        │  │
 │  │                   │  │                              │  │ • SSH Private Keys     │  │
-│  │ Sieht NUR:        │  │   SSH: gog gmail search ...  │  │ • Google OAuth Tokens  │  │
-│  │ • JSON-Responses  │  │ ─────────────────────────────►  │ • DB-Passwörter        │  │
-│  │ • API-Antworten   │  │                              │  │ • Service Secrets      │  │
+│  │ Sees ONLY:        │  │   SSH: gog gmail search ...  │  │ • Google OAuth Tokens  │  │
+│  │ • JSON responses  │  │ ─────────────────────────────►  │ • DB Passwords         │  │
+│  │ • API answers     │  │                              │  │ • Service Secrets      │  │
 │  │                   │  │   HTTPS: Gitea/n8n API       │  │                        │  │
-│  │ Sieht NICHT:      │  │ ─────────────────────────────►  └────────────────────────┘  │
+│  │ Does NOT see:     │  │ ─────────────────────────────►  └────────────────────────┘  │
 │  │ • OAuth Secrets   │  │                              │                              │
 │  │ • Private Keys    │  │                              │  ┌────────────────────────┐  │
-│  │ • DB-Passwörter   │  │ ◄──── JSON Response ─────────┤  │ Services:              │  │
+│  │ • DB Passwords    │  │ ◄──── JSON Response ─────────┤  │ Services:              │  │
 │  └───────────────────┘  │                              │  │ • Traefik (Reverse     │  │
 │                         │                              │  │   Proxy)               │  │
 │  WireGuard Client +     │                              │  │ • Gitea (Git API)      │  │
-│  SSH Key (lokal)        │                              │  │ • n8n (Workflows)      │  │
+│  SSH Key (local)        │                              │  │ • n8n (Workflows)      │  │
 │                         │                              │  │ • gogcli (Google CLI)  │  │
 └─────────────────────────┘                              └──────────────────────────────┘
 ```
 
-### Zwei Zugriffsmuster
+### Two Access Patterns
 
-| Muster | Services | Wie | Was LLM sieht |
-|--------|----------|-----|---------------|
-| **SSH/CLI** | Google Workspace (gogcli) | `ssh admin@10.100.0.1 "gog gmail ..."` | Nur JSON-Response |
-| **HTTPS/API** | Gitea, n8n | API-Calls via Traefik | Nur API-Response |
+| Pattern | Services | How | What LLM Sees |
+|---------|----------|-----|---------------|
+| **SSH/CLI** | Google Workspace (gogcli) | `ssh admin@10.100.0.1 "gog gmail ..."` | Only JSON response |
+| **HTTPS/API** | Gitea, n8n | API calls via Traefik | Only API response |
 
-### Beispiel: OpenClaw liest E-Mails
+### Example: OpenClaw Reads Emails
 
 ```bash
-# OpenClaw führt aus (SSH-Key liegt auf OpenClaw-VPS, nicht beim LLM):
+# OpenClaw executes (SSH key on OpenClaw-VPS, not with LLM):
 ssh admin@10.100.0.1 "gog gmail search 'is:unread' --max 5 --json"
 
-# LLM sieht nur die Antwort:
-[{"id": "abc123", "subject": "Meeting morgen", "from": "chef@firma.de"}]
+# LLM sees only the response:
+[{"id": "abc123", "subject": "Meeting tomorrow", "from": "boss@company.com"}]
 
-# LLM sieht NICHT:
+# LLM does NOT see:
 # • Google OAuth Client Secret (in /opt/gogcli/)
 # • Google Access/Refresh Token (in /opt/gogcli/)
-# • SSH Private Key (liegt auf OpenClaw-VPS)
+# • SSH Private Key (on OpenClaw-VPS)
 ```
 
-### Beispiel: OpenClaw erstellt Git Issue
+### Example: OpenClaw Creates Git Issue
 
 ```bash
-# OpenClaw ruft auf (Token hat nur Issue-Rechte, nicht Admin):
+# OpenClaw calls (token has only issue rights, not admin):
 curl -H "Authorization: token giteaXYZ..." \
-  https://git.deine-domain.de/api/v1/repos/user/repo/issues \
-  -d '{"title": "Bug gefunden"}'
+  https://git.your-domain.com/api/v1/repos/user/repo/issues \
+  -d '{"title": "Bug found"}'
 
-# LLM kennt nur den eingeschränkten API-Token
-# LLM kennt NICHT:
-# • Gitea Admin-Passwort
-# • PostgreSQL Credentials
+# LLM only knows the restricted API token
+# LLM does NOT know:
+# • Gitea Admin password
+# • PostgreSQL credentials
 # • Gitea Secret Key / Internal Token
 ```
 
-### OpenClaw als VPN-Client einrichten
+### Set Up OpenClaw as VPN Client
 
 ```hcl
 # In terraform.tfvars:
@@ -93,11 +93,11 @@ vpn_clients = ["admin", "laptop", "openclaw"]
 ```bash
 terraform apply
 
-# WireGuard-Config für OpenClaw abrufen:
+# Get WireGuard config for OpenClaw:
 terraform output -json vpn_configs | jq -r '.openclaw'
 ```
 
-Dann auf dem OpenClaw-VPS die WireGuard-Config installieren und SSH-Key für `admin@10.100.0.1` hinterlegen.
+Then install the WireGuard config on the OpenClaw-VPS and add SSH key for `admin@10.100.0.1`.
 
 ---
 
@@ -105,39 +105,39 @@ Dann auf dem OpenClaw-VPS die WireGuard-Config installieren und SSH-Key für `ad
 
 | Service | Tool | Status |
 |---------|------|--------|
-| Google Workspace | `gog` (gogcli) | ✅ Fertig |
-| Gitea | `tea` CLI | 🔧 Geplant |
-| n8n | Built-in CLI | 🔧 Geplant |
+| Google Workspace | `gog` (gogcli) | ✅ Done |
+| Gitea | `tea` CLI | 🔧 Planned |
+| n8n | Built-in CLI | 🔧 Planned |
 
 ---
 
-## Voraussetzungen
+## Prerequisites
 
-### 1. Server erstellen (5 Min)
+### 1. Create Server (5 min)
 
-1. Gehe zu [Hetzner Cloud Console](https://console.hetzner.cloud)
-2. Neues Projekt erstellen (falls noch nicht vorhanden)
-3. Server hinzufügen:
-   - **Standort:** Beliebig (z.B. Falkenstein)
+1. Go to [Hetzner Cloud Console](https://console.hetzner.cloud)
+2. Create new project (if not exists)
+3. Add server:
+   - **Location:** Any (e.g., Falkenstein)
    - **Image:** Debian 12
-   - **Typ:** CX22 oder größer (mind. 2 vCPU, 4 GB RAM)
-   - **SSH-Key:** Deinen öffentlichen Key hinzufügen
-4. Server erstellen und **IP-Adresse notieren**
+   - **Type:** CX22 or larger (min 2 vCPU, 4 GB RAM)
+   - **SSH Key:** Add your public key
+4. Create server and **note the IP address**
 
-### 2. Domain einrichten (5 Min)
+### 2. Set Up Domain (5 min)
 
-Bei [Hetzner Cloud Console](https://console.hetzner.cloud) → DNS:
+At [Hetzner Cloud Console](https://console.hetzner.cloud) → DNS:
 
 ```
-example.com      A     123.45.67.89    (deine Server-IP)
-*.example.com    A     123.45.67.89    (Wildcard für Services)
+example.com      A     123.45.67.89    (your server IP)
+*.example.com    A     123.45.67.89    (wildcard for services)
 ```
 
-**DNS API Token erstellen:** Console → Project → Security → API Tokens
+**Create DNS API Token:** Console → Project → Security → API Tokens
 
-> ⚠️ Die alten dns.hetzner.com Tokens funktionieren seit 2025 nicht mehr!
+> ⚠️ The old dns.hetzner.com tokens no longer work since 2025!
 
-### 3. Terraform installieren (einmalig)
+### 3. Install Terraform (once)
 
 ```bash
 # macOS
@@ -149,147 +149,147 @@ sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(l
 sudo apt-get update && sudo apt-get install terraform
 terraform --version
 
-# Oder: https://terraform.io/downloads
+# Or: https://terraform.io/downloads
 ```
 
 ---
 
 ## Installation
 
-> **Wichtig:** Terraform wird auf deinem **lokalen Rechner** (Client) ausgeführt, nicht auf dem VPS! Terraform verbindet sich per SSH zum Server und richtet diesen remote ein.
+> **Important:** Terraform runs on your **local machine** (client), not on the VPS! Terraform connects via SSH to the server and configures it remotely.
 
-### SSH-Agent vorbereiten (bei Passphrase-geschütztem Key)
+### Prepare SSH-Agent (for passphrase-protected keys)
 
 ```bash
-# SSH-Agent starten
+# Start SSH-Agent
 eval "$(ssh-agent -s)"
 
-# Key hinzufügen (Passphrase wird einmalig abgefragt)
+# Add key (passphrase prompted once)
 ssh-add ~/.ssh/id_ed25519
 
-# Prüfen ob Key geladen
+# Verify key is loaded
 ssh-add -l
 ```
 
-### Schritt 1: Repository klonen
+### Step 1: Clone Repository
 
 ```bash
 git clone https://github.com/tabee/vps-bootstrap.git
 cd vps-bootstrap
 ```
 
-### Schritt 2: Konfiguration erstellen
+### Step 2: Create Configuration
 
 ```bash
 cp terraform.tfvars.example terraform.tfvars
 ```
 
-Öffne `terraform.tfvars` und trage deine Werte ein:
+Open `terraform.tfvars` and enter your values:
 
 ```hcl
-# PFLICHT - Ohne diese geht nichts
-ssh_host             = "123.45.67.89"        # IP aus Hetzner Console
-ssh_private_key_path = ""                    # Leer = SSH-Agent nutzen
-domain               = "example.com"          # Deine Domain
+# REQUIRED - Must be set
+ssh_host             = "123.45.67.89"        # IP from Hetzner Console
+ssh_private_key_path = ""                    # Empty = use SSH-Agent
+domain               = "example.com"          # Your domain
 hetzner_dns_token    = "xxx"                  # DNS API Token
-acme_email           = "du@example.com"       # E-Mail für Let's Encrypt
+acme_email           = "you@example.com"      # Email for Let's Encrypt
 
-# OPTIONAL - Services aktivieren (default: aus)
-enable_gitea  = false  # Git-Server unter git.example.com
-enable_n8n    = false  # Workflow-Automation unter n8n.example.com
-enable_whoami = true   # Test-Service unter whoami.example.com
+# OPTIONAL - Enable services (default: off)
+enable_gitea  = false  # Git server at git.example.com
+enable_n8n    = false  # Workflow automation at n8n.example.com
+enable_whoami = true   # Test service at whoami.example.com
 enable_gogcli = false  # Google Workspace CLI (via SSH)
 
-# OPTIONAL - VPN-Clients (default: ["admin"])
+# OPTIONAL - VPN clients (default: ["admin"])
 vpn_clients = ["admin", "iphone", "laptop"]
 ```
 
-### Schritt 3: Server einrichten
+### Step 3: Set Up Server
 
 ```bash
-terraform init      # Einmalig: Plugins herunterladen
-terraform apply     # Server konfigurieren (dauert ~5 Minuten)
+terraform init      # Once: download plugins
+terraform apply     # Configure server (~5 minutes)
 ```
 
-Terraform zeigt dir am Ende:
-- Alle generierten Passwörter
-- VPN-Konfigurationen
-- Service-URLs
+Terraform shows you at the end:
+- All generated passwords
+- VPN configurations
+- Service URLs
 
-### Schritt 4: VPN einrichten (WICHTIG!)
+### Step 4: Set Up VPN (IMPORTANT!)
 
-⚠️ **Nach Abschluss ist der Server NUR noch über VPN erreichbar!**
+⚠️ **After completion, the server is ONLY accessible via VPN!**
 
 ```bash
-# VPN-Config anzeigen
+# Show VPN config
 terraform output -json access | jq -r '.vpn.config_cmd' | bash
 
-# Oder QR-Code für WireGuard-App (iOS/Android)
+# Or QR code for WireGuard app (iOS/Android)
 terraform output -json access | jq -r '.vpn.qr_cmd' | bash
 ```
 
-1. WireGuard-App installieren ([iOS](https://apps.apple.com/app/wireguard/id1441195209) / [Android](https://play.google.com/store/apps/details?id=com.wireguard.android))
-2. QR-Code scannen oder Config importieren
-3. VPN aktivieren
+1. Install WireGuard app ([iOS](https://apps.apple.com/app/wireguard/id1441195209) / [Android](https://play.google.com/store/apps/details?id=com.wireguard.android))
+2. Scan QR code or import config
+3. Activate VPN
 
-### Schritt 5: Verbindung testen
+### Step 5: Test Connection
 
 ```bash
-# Mit VPN verbunden:
-ssh admin@10.100.0.1    # SSH über VPN
+# With VPN connected:
+ssh admin@10.100.0.1    # SSH over VPN
 
-# Root werden (passwortlos)
+# Become root (passwordless)
 sudo -i
 
-# Service testen
+# Test service
 curl -k https://whoami.example.com
 ```
 
 ---
 
-## Konfiguration (terraform.tfvars)
+## Configuration (terraform.tfvars)
 
-| Variable | Pflicht | Default | Beschreibung |
-|----------|:-------:|---------|--------------|
-| `ssh_host` | ✓ | - | IP-Adresse des Servers |
-| `ssh_private_key_path` | | - | Pfad zum SSH-Key (leer = SSH-Agent) |
-| `domain` | ✓ | - | Deine Domain |
+| Variable | Required | Default | Description |
+|----------|:--------:|---------|-------------|
+| `ssh_host` | ✓ | - | Server IP address |
+| `ssh_private_key_path` | | - | Path to SSH key (empty = SSH-Agent) |
+| `domain` | ✓ | - | Your domain |
 | `hetzner_dns_token` | ✓ | - | Hetzner DNS API Token |
-| `acme_email` | ✓ | - | E-Mail für Let's Encrypt |
-| `enable_gitea` | | `false` | Git-Server (git.domain.com) |
-| `enable_n8n` | | `false` | Workflow-Tool (n8n.domain.com) |
-| `enable_whoami` | | `true` | Test-Service (whoami.domain.com) |
+| `acme_email` | ✓ | - | Email for Let's Encrypt |
+| `enable_gitea` | | `false` | Git server (git.domain.com) |
+| `enable_n8n` | | `false` | Workflow tool (n8n.domain.com) |
+| `enable_whoami` | | `true` | Test service (whoami.domain.com) |
 | `enable_gogcli` | | `false` | Google Workspace CLI (via SSH) |
-| `vpn_clients` | | `["admin"]` | Liste der VPN-Clients |
-| `admin_user` | | `"admin"` | SSH-Benutzername nach Härtung |
+| `vpn_clients` | | `["admin"]` | List of VPN clients |
+| `admin_user` | | `"admin"` | SSH username after hardening |
 
 ---
 
-## VPN-Clients verwalten
+## Manage VPN Clients
 
-### Neuen Client hinzufügen
+### Add New Client
 
 ```hcl
 # In terraform.tfvars:
-vpn_clients = ["admin", "iphone", "laptop", "neues-geraet"]
+vpn_clients = ["admin", "iphone", "laptop", "new-device"]
 ```
 
 ```bash
 terraform apply
 ```
 
-### Client entfernen
+### Remove Client
 
 ```hcl
-# Client aus Liste entfernen:
-vpn_clients = ["admin", "laptop"]  # "iphone" entfernt
+# Remove client from list:
+vpn_clients = ["admin", "laptop"]  # "iphone" removed
 ```
 
 ```bash
-terraform apply  # Client wird automatisch gelöscht
+terraform apply  # Client is automatically deleted
 ```
 
-### Alle Clients anzeigen
+### List All Clients
 
 ```bash
 ssh admin@10.100.0.1 'sudo /opt/vps/bootstrap/scripts/vpn-client.sh list'
@@ -299,50 +299,50 @@ ssh admin@10.100.0.1 'sudo /opt/vps/bootstrap/scripts/vpn-client.sh list'
 
 ## gogcli (Google Workspace CLI)
 
-Mit `enable_gogcli = true` wird [gogcli](https://gogcli.sh) installiert - ein CLI für Gmail, Calendar, Drive, Sheets etc.
+With `enable_gogcli = true`, [gogcli](https://gogcli.sh) is installed - a CLI for Gmail, Calendar, Drive, Sheets, etc.
 
-### Sicherheitsmodell
+### Security Model
 
-**Kein HTTP-Endpunkt.** Zugriff ausschließlich per SSH:
+**No HTTP endpoint.** Access exclusively via SSH:
 
 ```bash
-# Von deinem lokalen Rechner (via VPN):
+# From your local machine (via VPN):
 ssh admin@10.100.0.1 "gog gmail search 'is:unread' --json"
 
-# Von anderem VPS (z.B. OpenClaw):
+# From another VPS (e.g., OpenClaw):
 ssh admin@10.100.0.1 "gog drive list --json"
 ```
 
-### Einrichtung
+### Setup
 
-1. **Google OAuth Credentials erstellen:**
+1. **Create Google OAuth Credentials:**
    - [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
    - OAuth 2.0 Client ID → "Desktop app"
-   - JSON-Datei herunterladen
+   - Download JSON file
 
-2. **Credentials auf den Server kopieren:**
+2. **Copy credentials to server:**
    ```bash
    scp client_secret_*.json admin@10.100.0.1:/opt/gogcli/
    ```
 
-3. **Authorisierung durchführen (einmalig):**
+3. **Authorize (once):**
    ```bash
    ssh admin@10.100.0.1
    gog auth credentials /opt/gogcli/client_secret_*.json
-   gog auth add deine@gmail.com
+   gog auth add your@gmail.com
    ```
 
-4. **Testen:**
+4. **Test:**
    ```bash
    gog gmail labels list
    gog drive list
    gog calendar events --days 7
    ```
 
-### Verfügbare Services
+### Available Services
 
-| Service | Beispiel-Befehl |
-|---------|----------------|
+| Service | Example Command |
+|---------|-----------------|
 | `gmail` | `gog gmail search 'is:unread' --max 10` |
 | `drive` | `gog drive list --json` |
 | `calendar` | `gog calendar events --days 7` |
@@ -353,105 +353,105 @@ ssh admin@10.100.0.1 "gog drive list --json"
 
 ---
 
-## Passwörter & Zugangsdaten
+## Passwords & Credentials
 
-Alle Passwörter werden sicher generiert:
+All passwords are securely generated:
 
 ```bash
-# Alle Credentials anzeigen
+# Show all credentials
 terraform output -json credentials | jq
 
-# VPN-Config für admin
+# VPN config for admin
 terraform output -json access | jq -r '.vpn.config_cmd' | bash
 ```
 
-⚠️ **Speichere diese Zugangsdaten sicher (z.B. Password-Manager)!**
+⚠️ **Store these credentials securely (e.g., password manager)!**
 
 ---
 
-## SSH-Zugang nach Installation
+## SSH Access After Installation
 
-Nach der Installation ist SSH **nur noch über VPN** erreichbar:
+After installation, SSH is **only accessible via VPN**:
 
 ```bash
-# ❌ Von außen nicht mehr möglich:
+# ❌ No longer possible from outside:
 ssh root@123.45.67.89
 
-# ✅ Über VPN:
+# ✅ Via VPN:
 ssh admin@10.100.0.1
 
-# Root werden:
+# Become root:
 sudo -i
 ```
 
 ---
 
-## Fehlerbehebung
+## Troubleshooting
 
-### VPN verbindet nicht
+### VPN Not Connecting
 
-1. **DNS prüfen:** Zeigt deine Domain auf die Server-IP?
+1. **Check DNS:** Does your domain point to the server IP?
    ```bash
    dig +short example.com
    ```
-2. **Port offen?** UDP 51820 muss erreichbar sein
+2. **Port open?** UDP 51820 must be reachable
    ```bash
    nc -zu SERVER_IP 51820 && echo "OK" || echo "BLOCKED"
    ```
-3. **Config korrekt?** Endpoint-IP in der WireGuard-Config prüfen
+3. **Config correct?** Check endpoint IP in WireGuard config
 
-### Ausgesperrt?
+### Locked Out?
 
-Falls VPN nicht funktioniert und SSH nicht mehr geht:
-1. Hetzner Console → Server → Rescue-System aktivieren
-2. Server neu starten (bootet in Rescue)
-3. Festplatte mounten und SSH-Config reparieren
-
----
-
-## Sicherheit
-
-Dieser Server ist nach Installation maximal gehärtet:
-
-- **Netzwerk:** Nur UDP 51820 (WireGuard) öffentlich erreichbar
-- **SSH:** Nur über VPN, nur Key-Auth, kein Root
-- **Firewall:** nftables mit Default-DENY Policy
-- **Docker:** Kann Firewall nicht manipulieren (`iptables: false`)
-- **Updates:** Sicherheitsupdates automatisch (unattended-upgrades)
-- **Intrusion Detection:** Fail2ban blockiert Brute-Force
+If VPN doesn't work and SSH is no longer accessible:
+1. Hetzner Console → Server → Enable Rescue System
+2. Restart server (boots into Rescue)
+3. Mount disk and repair SSH config
 
 ---
 
-## Was wird installiert?
+## Security
 
-| Komponente | Zweck | Port |
-|------------|-------|------|
-| WireGuard | VPN-Tunnel | UDP 51820 (einziger öffentlicher Port!) |
+This server is maximally hardened after installation:
+
+- **Network:** Only UDP 51820 (WireGuard) publicly reachable
+- **SSH:** Only via VPN, key-auth only, no root
+- **Firewall:** nftables with default-DENY policy
+- **Docker:** Cannot manipulate firewall (`iptables: false`)
+- **Updates:** Security updates automatic (unattended-upgrades)
+- **Intrusion Detection:** Fail2ban blocks brute-force
+
+---
+
+## What Gets Installed?
+
+| Component | Purpose | Port |
+|-----------|---------|------|
+| WireGuard | VPN tunnel | UDP 51820 (only public port!) |
 | nftables | Firewall | - |
-| Docker | Container-Runtime | - |
-| Traefik | Reverse Proxy + HTTPS | 443 (nur über VPN) |
-| Fail2ban | Brute-Force-Schutz | - |
-| Unattended Upgrades | Auto-Updates | - |
-| (optional) Gitea | Git-Server | 2222 (SSH, nur VPN) |
-| (optional) n8n | Workflow-Automation | - |
-| (optional) whoami | Test-Service | - |
+| Docker | Container runtime | - |
+| Traefik | Reverse proxy + HTTPS | 443 (VPN only) |
+| Fail2ban | Brute-force protection | - |
+| Unattended Upgrades | Auto-updates | - |
+| (optional) Gitea | Git server | 2222 (SSH, VPN only) |
+| (optional) n8n | Workflow automation | - |
+| (optional) whoami | Test service | - |
 | (optional) gogcli | Google Workspace CLI | via SSH |
 
 ---
 
-## Architektur
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  Internet                                                   │
 │       │                                                     │
-│       ▼ UDP 51820 (einziger offener Port)                  │
+│       ▼ UDP 51820 (only open port)                         │
 │  ┌────────────────────────────────────────────────────────┐ │
 │  │  WireGuard VPN                                         │ │
 │  │  10.100.0.1 (Server) ←→ 10.100.0.2+ (Clients)         │ │
 │  └────────────────────────────────────────────────────────┘ │
 │       │                                                     │
-│       ▼ Nur über VPN erreichbar                            │
+│       ▼ Only accessible via VPN                            │
 │  ┌────────────────────────────────────────────────────────┐ │
 │  │  Docker (10.20.0.0/24)                                 │ │
 │  │    ├── Traefik (443) ─→ git.*, n8n.*, whoami.*        │ │
@@ -463,7 +463,7 @@ Dieser Server ist nach Installation maximal gehärtet:
 │       │ SSH                                                 │
 │       ▼                                                     │
 │  ┌────────────────────────────────────────────────────────┐ │
-│  │  gogcli (optional, kein Docker!)                        │ │
+│  │  gogcli (optional, no Docker!)                          │ │
 │  │    └── /usr/local/bin/gog → Gmail, Drive, Calendar...  │ │
 │  └────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────┘
@@ -471,6 +471,6 @@ Dieser Server ist nach Installation maximal gehärtet:
 
 ---
 
-## Lizenz
+## License
 
-MIT License - siehe [LICENSE](LICENSE)
+MIT License - see [LICENSE](LICENSE)
