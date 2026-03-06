@@ -105,6 +105,8 @@ Dann auf dem OpenClaw-VPS die WireGuard-Config installieren und SSH-Key für `ad
 
 **Ziel:** KI-Agenten sollen *niemals* API-Tokens oder Credentials sehen.
 
+- fehlt: apt update && apt install -y git
+
 **Aktueller Stand:**
 
 | Service | Tool | LLM sieht Credentials? | Status |
