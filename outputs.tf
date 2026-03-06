@@ -12,8 +12,8 @@ output "access" {
   value = {
     ssh = {
       hint       = "After hardening only accessible via VPN!"
-      command    = "ssh ${var.admin_user}@10.100.0.1"
-      vpn_ip     = "10.100.0.1"
+      command    = "ssh ${var.admin_user}@${local.vpn_server_ip}"
+      vpn_ip     = local.vpn_server_ip
       sudo       = "sudo -i (passwordless)"
     }
     vpn = {
@@ -45,7 +45,7 @@ output "credentials" {
     } : null
 
     gogcli = var.enable_gogcli ? {
-      access   = "ssh ${var.admin_user}@10.100.0.1 'gog <command>'"
+      access   = "ssh ${var.admin_user}@${local.vpn_server_ip} 'gog <command>'"
       config   = "/opt/gogcli"
       note     = "Requires Google OAuth setup - see README"
     } : null
@@ -62,7 +62,7 @@ output "services" {
     gitea  = var.enable_gitea ? "https://git.${var.domain}" : null
     n8n    = var.enable_n8n ? "https://n8n.${var.domain}" : null
     whoami = var.enable_whoami ? "https://whoami.${var.domain}" : null
-    gogcli = var.enable_gogcli ? "ssh ${var.admin_user}@10.100.0.1 'gog <command>'" : null
+    gogcli = var.enable_gogcli ? "ssh ${var.admin_user}@${local.vpn_server_ip} 'gog <command>'" : null
   }
 }
 
@@ -75,7 +75,7 @@ output "quick_commands" {
   value = {
     vpn_config = "terraform output -json access | jq -r '.vpn.config_cmd' | bash"
     vpn_qr     = "terraform output -json access | jq -r '.vpn.qr_cmd' | bash"
-    ssh_vpn    = "ssh ${var.admin_user}@10.100.0.1"
+    ssh_vpn    = "ssh ${var.admin_user}@${local.vpn_server_ip}"
     all_creds  = "terraform output -json credentials | jq"
   }
 }

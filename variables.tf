@@ -9,6 +9,11 @@
 variable "ssh_host" {
   description = "Server IP address (from Hetzner Console)"
   type        = string
+
+  validation {
+    condition     = can(regex("^[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}$", var.ssh_host)) || can(regex("^[a-z0-9][a-z0-9.-]+$", var.ssh_host))
+    error_message = "ssh_host must be a valid IPv4 address or hostname."
+  }
 }
 
 variable "ssh_private_key_path" {
@@ -27,6 +32,11 @@ variable "ssh_private_key" {
 variable "domain" {
   description = "Your domain (e.g. example.com)"
   type        = string
+
+  validation {
+    condition     = can(regex("^[a-z0-9][a-z0-9.-]*\\.[a-z]{2,}$", var.domain))
+    error_message = "domain must be a valid domain name (e.g. example.com)."
+  }
 }
 
 variable "hetzner_dns_token" {
@@ -38,10 +48,15 @@ variable "hetzner_dns_token" {
 variable "acme_email" {
   description = "Email for Let's Encrypt notifications"
   type        = string
+
+  validation {
+    condition     = can(regex("^[^@]+@[^@]+\\.[^@]+$", var.acme_email))
+    error_message = "acme_email must be a valid email address."
+  }
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
-# SSH OPTIONEN
+# SSH OPTIONS
 # ═══════════════════════════════════════════════════════════════════════════
 
 variable "ssh_user" {
@@ -54,6 +69,11 @@ variable "ssh_port" {
   description = "SSH port"
   type        = number
   default     = 22
+
+  validation {
+    condition     = var.ssh_port > 0 && var.ssh_port < 65536
+    error_message = "ssh_port must be between 1 and 65535."
+  }
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -127,7 +147,7 @@ variable "repo_path" {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
-# SERVER OPTIONEN
+# SERVER OPTIONS
 # ═══════════════════════════════════════════════════════════════════════════
 
 variable "hostname" {
@@ -137,7 +157,7 @@ variable "hostname" {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
-# BOOTSTRAP OPTIONEN
+# BOOTSTRAP OPTIONS
 # ═══════════════════════════════════════════════════════════════════════════
 
 variable "skip_harden" {
