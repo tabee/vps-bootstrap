@@ -55,6 +55,7 @@
 | n8n | `n8n` | Traefik → `https://n8n.DOMAIN` | `enable_n8n = true` |
 | whoami | `whoami` | Traefik → `https://whoami.DOMAIN` | `enable_whoami = true` |
 | gogcli | `gogcli` | SSH → `gog <command>` | `enable_gogcli = true` |
+| uptime-kuma | `uptime-kuma` | Traefik → `https://status.DOMAIN` | `enable_uptime_kuma = true` |
 
 ---
 
@@ -229,6 +230,51 @@ sudo docker restart gogcli
 ```
 
 📖 **Vollständige Dokumentation:** [steipete/gogcli](https://github.com/steipete/gogcli)
+
+---
+
+## Uptime Kuma
+
+Self-hosted monitoring tool for tracking uptime of websites and services.
+
+> 🌐 **Zugriff:** `https://status.YOUR_DOMAIN` (VPN + Browser)
+
+```
+┌─────────────┐     VPN      ┌────────────┐    HTTPS    ┌──────────────┐
+│   Browser   │ ──────────── │  Traefik   │ ─────────── │ Uptime Kuma  │
+│  (Mensch)   │              │  :443      │             │  :3001       │
+└─────────────┘              └────────────┘             └──────────────┘
+```
+
+### Konfiguration
+
+```hcl
+enable_uptime_kuma = true
+```
+
+### Zugriff
+
+- URL: `https://status.YOUR_DOMAIN`
+- First user becomes administrator
+- Data stored in: `/opt/uptime-kuma/data/`
+
+### Funktionen
+
+- Website/API uptime monitoring
+- Multi-protocol support (HTTP, TCP, Ping, DNS, etc.)
+- Status pages for public/internal use
+- Webhook notifications
+- Multi-user authentication
+
+### Container Details
+
+| Property | Value |
+|----------|-------|
+| Container | `uptime-kuma` |
+| Image | `louislam/uptime-kuma:1` |
+| Network | `vpn_net` (10.20.0.70) |
+| Data | `/opt/uptime-kuma/data/` |
+| Ports | **keine** (nur via Traefik) |
 
 ---
 

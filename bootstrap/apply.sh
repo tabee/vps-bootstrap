@@ -71,6 +71,7 @@ Environment:
     ENABLE_N8N=true/false     Install n8n workflow automation
     ENABLE_WHOAMI=true/false  Install whoami test service
     ENABLE_GOGCLI=true/false  Install Google Workspace CLI (SSH-Zugriff)
+    ENABLE_UPTIME_KUMA=true/false  Install Uptime Kuma monitoring (Traefik)
     ADMIN_USER=admin          SSH user after hardening
 EOF
       exit 0
@@ -97,6 +98,7 @@ ENABLE_GITEA="${ENABLE_GITEA:-false}"
 ENABLE_N8N="${ENABLE_N8N:-false}"
 ENABLE_WHOAMI="${ENABLE_WHOAMI:-true}"
 ENABLE_GOGCLI="${ENABLE_GOGCLI:-false}"
+ENABLE_UPTIME_KUMA="${ENABLE_UPTIME_KUMA:-false}"
 ADMIN_USER="${ADMIN_USER:-admin}"
 
 # ── Lock-file to prevent concurrent execution ───────────────────────────────
@@ -190,6 +192,7 @@ main() {
   [[ "$ENABLE_N8N" == "true" ]] && run_service_module "n8n"
   [[ "$ENABLE_WHOAMI" == "true" ]] && run_service_module "whoami"
   [[ "$ENABLE_GOGCLI" == "true" ]] && run_service_module "gogcli"
+  [[ "$ENABLE_UPTIME_KUMA" == "true" ]] && run_service_module "uptime-kuma"
   
   # ─────────────────────────────────────────────────────────────────────────
   # PHASE 3: Lockdown (handled by Terraform after VPN clients are created)
