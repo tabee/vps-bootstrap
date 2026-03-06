@@ -67,11 +67,14 @@ Options:
 
 Environment:
   Set these in .env or export before running:
-    ENABLE_GITEA=true/false   Install Gitea git server
-    ENABLE_N8N=true/false     Install n8n workflow automation
-    ENABLE_WHOAMI=true/false  Install whoami test service
-    ENABLE_GOGCLI=true/false  Install Google Workspace CLI (SSH-Zugriff)
-    ADMIN_USER=admin          SSH user after hardening
+    ENABLE_GITEA=true/false       Install Gitea git server
+    ENABLE_N8N=true/false         Install n8n workflow automation
+    ENABLE_WHOAMI=true/false      Install whoami test service
+    ENABLE_GOGCLI=true/false      Install Google Workspace CLI (SSH-Zugriff)
+    ENABLE_OLLAMA=true/false      Install Ollama local LLM runtime (SSH-Zugriff)
+    ENABLE_OPEN_WEBUI=true/false  Install Open WebUI AI chat interface (Traefik)
+    ENABLE_OPENCLAW=true/false    Install openclaw AI agent runtime (SSH-Zugriff)
+    ADMIN_USER=admin              SSH user after hardening
 EOF
       exit 0
       ;;
@@ -97,6 +100,9 @@ ENABLE_GITEA="${ENABLE_GITEA:-false}"
 ENABLE_N8N="${ENABLE_N8N:-false}"
 ENABLE_WHOAMI="${ENABLE_WHOAMI:-true}"
 ENABLE_GOGCLI="${ENABLE_GOGCLI:-false}"
+ENABLE_OLLAMA="${ENABLE_OLLAMA:-false}"
+ENABLE_OPEN_WEBUI="${ENABLE_OPEN_WEBUI:-false}"
+ENABLE_OPENCLAW="${ENABLE_OPENCLAW:-false}"
 ADMIN_USER="${ADMIN_USER:-admin}"
 
 # ── Lock-file to prevent concurrent execution ───────────────────────────────
@@ -190,6 +196,9 @@ main() {
   [[ "$ENABLE_N8N" == "true" ]] && run_service_module "n8n"
   [[ "$ENABLE_WHOAMI" == "true" ]] && run_service_module "whoami"
   [[ "$ENABLE_GOGCLI" == "true" ]] && run_service_module "gogcli"
+  [[ "$ENABLE_OLLAMA" == "true" ]] && run_service_module "ollama"
+  [[ "$ENABLE_OPEN_WEBUI" == "true" ]] && run_service_module "open-webui"
+  [[ "$ENABLE_OPENCLAW" == "true" ]] && run_service_module "openclaw"
   
   # ─────────────────────────────────────────────────────────────────────────
   # PHASE 3: Lockdown (handled by Terraform after VPN clients are created)

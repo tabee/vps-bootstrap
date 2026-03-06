@@ -104,6 +104,24 @@ variable "enable_gogcli" {
   default     = false
 }
 
+variable "enable_ollama" {
+  description = "Install Ollama local LLM runtime? (Docker, SSH access only)"
+  type        = bool
+  default     = false
+}
+
+variable "enable_open_webui" {
+  description = "Install Open WebUI AI chat interface? (Docker, Traefik access at ai.domain.com)"
+  type        = bool
+  default     = false
+}
+
+variable "enable_openclaw" {
+  description = "Install openclaw AI agent runtime? (Docker, SSH access only)"
+  type        = bool
+  default     = false
+}
+
 # ═══════════════════════════════════════════════════════════════════════════
 # GOGCLI - Google OAuth Credentials (optional, can be set later manually)
 # ═══════════════════════════════════════════════════════════════════════════
@@ -126,6 +144,24 @@ variable "google_project_id" {
   description = "Google Cloud Project ID"
   type        = string
   default     = ""
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# AI SERVICES - API Keys (optional, can be set later manually)
+# ═══════════════════════════════════════════════════════════════════════════
+
+variable "openai_api_key" {
+  description = "OpenAI API key (for n8n workflows, Open WebUI cloud models, openclaw)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "anthropic_api_key" {
+  description = "Anthropic API key (for openclaw)"
+  type        = string
+  default     = ""
+  sensitive   = true
 }
 
 # ═══════════════════════════════════════════════════════════════════════════

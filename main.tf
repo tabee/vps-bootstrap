@@ -81,6 +81,9 @@ ENABLE_GITEA="${var.enable_gitea}"
 ENABLE_N8N="${var.enable_n8n}"
 ENABLE_WHOAMI="${var.enable_whoami}"
 ENABLE_GOGCLI="${var.enable_gogcli}"
+ENABLE_OLLAMA="${var.enable_ollama}"
+ENABLE_OPEN_WEBUI="${var.enable_open_webui}"
+ENABLE_OPENCLAW="${var.enable_openclaw}"
 
 # ── Service Secrets ──────────────────────────────────────────────────────────
 %{if var.enable_gitea~}
@@ -95,6 +98,12 @@ N8N_ENCRYPTION_KEY="${random_password.n8n_encryption[0].result}"
 GOOGLE_CLIENT_ID="${var.google_client_id}"
 GOOGLE_CLIENT_SECRET="${var.google_client_secret}"
 GOOGLE_PROJECT_ID="${var.google_project_id}"
+%{endif~}
+%{if var.openai_api_key != ""~}
+OPENAI_API_KEY="${var.openai_api_key}"
+%{endif~}
+%{if var.anthropic_api_key != ""~}
+ANTHROPIC_API_KEY="${var.anthropic_api_key}"
 %{endif~}
 
 # ── VPN Clients ──────────────────────────────────────────────────────────────

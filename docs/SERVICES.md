@@ -55,6 +55,9 @@
 | n8n | `n8n` | Traefik → `https://n8n.DOMAIN` | `enable_n8n = true` |
 | whoami | `whoami` | Traefik → `https://whoami.DOMAIN` | `enable_whoami = true` |
 | gogcli | `gogcli` | SSH → `gog <command>` | `enable_gogcli = true` |
+| **Open WebUI** | `open-webui` | Traefik → `https://ai.DOMAIN` | `enable_open_webui = true` |
+| **Ollama** | `ollama` | SSH → `ollama run <model>` | `enable_ollama = true` |
+| **openclaw** | `openclaw` | SSH → `claw <command>` | `enable_openclaw = true` |
 
 ---
 
@@ -105,6 +108,15 @@ n8n_version = "latest"  # Optional, default: latest
 ### Security Note
 
 n8n is exposed to the internet. Consider restricting access via additional Traefik middleware if needed.
+
+### OpenAI Integration
+
+For n8n AI workflows, configure an OpenAI API key:
+
+```hcl
+enable_n8n     = true
+openai_api_key = "sk-..."
+```
 
 ---
 
@@ -229,6 +241,171 @@ sudo docker restart gogcli
 ```
 
 📖 **Vollständige Dokumentation:** [steipete/gogcli](https://github.com/steipete/gogcli)
+
+---
+
+## Ollama
+
+Lokale KI-Modelle direkt auf dem Server — kein Cloud-Anbieter nötig.
+
+> ⚠️ **Zugriff:** VPN + SSH only (kein Web-Interface, kein exponierter Port).
+> Open WebUI kann Ollama als Backend nutzen.
+
+```
+┌──────────────┐     VPN      ┌────────────┐     SSH      ┌─────────────┐
+│  Entwickler  │ ──────────── │  10.100.0.1│ ──────────── │   Docker    │
+│  / KI-Agent  │   WireGuard  │   Server   │  admin user  │   ollama    │
+└──────────────┘              └────────────┘              └─────────────┘
+```
+
+### Konfiguration
+
+```hcl
+enable_ollama = true
+```
+
+### Verwendung
+
+```bash
+ssh admin@10.100.0.1
+
+# Modell herunterladen
+ollama pull llama3.2
+
+# Modell interaktiv nutzen
+ollama run llama3.2
+
+# Alle geladenen Modelle anzeigen
+ollama list
+```
+
+### Hinweis zu Serverressourcen
+
+| Modellgrösse | Empfohlener Server |
+|-------------|-------------------|
+| 1B–3B Parameter | CX22 (2 vCPU, 4 GB RAM) |
+| 7B Parameter | CX32 (4 vCPU, 8 GB RAM) |
+| 13B+ Parameter | CX42 oder GPU-Server |
+
+### Container Details
+
+| Property | Value |
+|----------|-------|
+| Container | `ollama` |
+| Image | `ollama/ollama:latest` |
+| Network | `vpn_net` (10.20.0.80) |
+| Modelle | `/opt/ollama/models/` |
+| API | `http://10.20.0.80:11434` (intern, kein Port exponiert) |
+
+---
+
+## Open WebUI
+
+KI-Chat-Oberfläche für Menschen — ähnlich ChatGPT, selbst gehostet.
+
+> 🌐 **Zugriff:** `https://ai.YOUR_DOMAIN` (VPN + Browser)
+
+```
+┌─────────────┐     VPN      ┌────────────┐    HTTPS    ┌─────────────┐
+│   Browser   │ ──────────── │  Traefik   │ ─────────── │  Open WebUI │
+│  (Mensch)   │              │  :443      │             │  :8080      │
+└─────────────┘              └────────────┘             └─────────────┘
+                                                               │
+                                                        (intern) HTTP
+                                                               │
+                                                       ┌───────▼──────┐
+                                                       │    Ollama    │
+                                                       │ 10.20.0.80   │
+                                                       └──────────────┘
+```
+
+### Konfiguration
+
+```hcl
+enable_open_webui = true
+enable_ollama     = true   # Empfohlen als lokales Backend
+
+# Optional: Cloud-Modelle aktivieren
+openai_api_key = "sk-..."
+```
+
+### Zugriff
+
+- URL: `https://ai.YOUR_DOMAIN`
+- Erster Benutzer wird Administrator
+- Daten gespeichert in: `/opt/open-webui/data/`
+
+### Funktionen
+
+- Chat mit lokalen Modellen (Ollama) oder Cloud-Modellen (OpenAI, Anthropic)
+- Mehrbenutzer-Verwaltung
+- RAG (Dokumente hochladen und abfragen)
+- Konversationshistorie
+
+### Container Details
+
+| Property | Value |
+|----------|-------|
+| Container | `open-webui` |
+| Image | `ghcr.io/open-webui/open-webui:main` |
+| Network | `vpn_net` (10.20.0.60) |
+| Daten | `/opt/open-webui/data/` |
+| Ports | **keine** (nur via Traefik) |
+
+---
+
+## openclaw
+
+KI-Agenten-Runtime. **Läuft als Docker-Container.**
+
+> ⚠️ **Zugriff:** VPN + SSH only (kein Web-Interface, kein exponierter Port).
+
+```
+┌──────────────┐     VPN      ┌────────────┐     SSH      ┌─────────────┐
+│  KI-Agent /  │ ──────────── │  10.100.0.1│ ──────────── │   Docker    │
+│  Skript      │   WireGuard  │   Server   │  admin user  │  openclaw   │
+└──────────────┘              └────────────┘              └─────────────┘
+```
+
+### Konfiguration
+
+```hcl
+enable_openclaw   = true
+
+# API-Schlüssel für KI-Provider
+openai_api_key    = "sk-..."          # Optional
+anthropic_api_key = "sk-ant-..."      # Optional
+
+# Ollama als lokales Backend (falls enable_ollama = true)
+# wird automatisch konfiguriert
+```
+
+### Verwendung
+
+```bash
+# VPN verbinden, dann SSH
+ssh admin@10.100.0.1
+
+# Via Alias
+claw <subcommand>
+
+# Via docker exec
+docker exec openclaw claw <subcommand>
+
+# Interaktive Shell
+docker exec -it openclaw bash
+```
+
+### Container Details
+
+| Property | Value |
+|----------|-------|
+| Container | `openclaw` |
+| Image | `ghcr.io/tabee/openclaw:latest` |
+| Network | `vpn_net` (10.20.0.90) |
+| Config | `/opt/openclaw/config/` |
+| Workspace | `/opt/openclaw/workspace/` |
+| Ports | **keine** (nur docker exec) |
 
 ---
 

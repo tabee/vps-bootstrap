@@ -50,6 +50,25 @@ enable_gogcli = false
 # google_client_secret = "GOCSPX-xxx"
 # google_project_id    = "your-project-id"
 
+# ── AI Services ──────────────────────────────────────────────────────────────
+
+# Local LLM runtime (Docker, SSH access only)
+# Models stored in /opt/ollama/models/
+# Usage: ollama run llama3.2
+enable_ollama = false
+
+# AI chat interface for humans (ai.example.com via Traefik)
+# Connects to Ollama for local models (requires enable_ollama = true)
+enable_open_webui = false
+
+# AI agent runtime (Docker, SSH access only)
+# Usage: claw <subcommand>
+enable_openclaw = false
+
+# API keys for AI providers (optional - used by n8n, Open WebUI, openclaw)
+# openai_api_key    = "sk-..."
+# anthropic_api_key = "sk-ant-..."
+
 # ═══════════════════════════════════════════════════════════════════════════
 # OPTIONAL - VPN Clients
 # ═══════════════════════════════════════════════════════════════════════════
