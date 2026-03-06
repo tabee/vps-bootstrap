@@ -95,6 +95,19 @@ install_packages() {
   log_info "Installing ${#to_install[@]} package(s): ${to_install[*]}"
   run_cmd env DEBIAN_FRONTEND="$DEBIAN_FRONTEND" apt-get update -qq
   run_cmd env DEBIAN_FRONTEND="$DEBIAN_FRONTEND" apt-get install "${APT_OPTS[@]}" -y -qq ${to_install[*]}
+
+  # CRITICAL: Stop dnsmasq immediately after install - it auto-starts and blocks port 53
+  # This breaks systemd-resolved which we need for apt operations.
+  # dnsmasq will be configured properly later to listen only on wg0.
+  if systemctl is-active --quiet dnsmasq 2>/dev/null; then
+    log_info "Stopping dnsmasq (auto-started by apt, conflicts with systemd-resolved)"
+    systemctl stop dnsmasq || true
+    systemctl disable dnsmasq || true
+  fi
+
+  # Restart systemd-resolved to reclaim port 53
+  systemctl restart systemd-resolved || true
+  sleep 1
 }
 
 # ── Sysctl hardening ────────────────────────────────────────────────────────
