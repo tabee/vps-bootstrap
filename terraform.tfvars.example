@@ -63,3 +63,11 @@ vpn_clients = ["admin", "laptop", "phone"]
 
 # Server hostname
 # hostname = "vps"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# POST-INSTALLATION - Set after first successful deployment
+# ═══════════════════════════════════════════════════════════════════════════
+
+# After initial deployment with hardening, set this to true.
+# Terraform will then connect via VPN (10.100.0.1) instead of public IP.
+# use_vpn = true

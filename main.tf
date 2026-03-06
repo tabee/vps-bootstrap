@@ -102,6 +102,10 @@ EOT
   # Use SSH-Agent when no explicit key is provided
   use_ssh_agent   = var.ssh_private_key == "" && var.ssh_private_key_path == ""
   ssh_private_key = local.use_ssh_agent ? null : (var.ssh_private_key != "" ? var.ssh_private_key : file(var.ssh_private_key_path))
+  
+  # Connection settings: VPN after hardening, public IP for initial setup
+  effective_ssh_host = var.use_vpn ? local.vpn_server_ip : var.ssh_host
+  effective_ssh_user = var.use_vpn ? var.admin_user : var.ssh_user
 }
 
 # =============================================================================
@@ -115,8 +119,8 @@ resource "null_resource" "clone_repo" {
 
   connection {
     type        = "ssh"
-    host        = var.ssh_host
-    user        = var.ssh_user
+    host        = local.effective_ssh_host
+    user        = local.effective_ssh_user
     port        = var.ssh_port
     agent       = local.use_ssh_agent
     private_key = local.ssh_private_key
@@ -125,9 +129,9 @@ resource "null_resource" "clone_repo" {
   provisioner "remote-exec" {
     inline = [
       "set -e",
-      "apt-get update -qq && apt-get install -y -qq git",
-      "rm -rf ${var.repo_path}",
-      "git clone --branch ${var.git_ref} ${var.git_repo_url} ${var.repo_path}",
+      "sudo apt-get update -qq && sudo apt-get install -y -qq git",
+      "sudo rm -rf ${var.repo_path}",
+      "sudo git clone --branch ${var.git_ref} ${var.git_repo_url} ${var.repo_path}",
     ]
   }
 }
@@ -145,8 +149,8 @@ resource "null_resource" "deploy_env" {
 
   connection {
     type        = "ssh"
-    host        = var.ssh_host
-    user        = var.ssh_user
+    host        = local.effective_ssh_host
+    user        = local.effective_ssh_user
     port        = var.ssh_port
     agent       = local.use_ssh_agent
     private_key = local.ssh_private_key
@@ -154,12 +158,13 @@ resource "null_resource" "deploy_env" {
 
   provisioner "file" {
     content     = local.env_content
-    destination = "${var.repo_path}/bootstrap/.env"
+    destination = "/tmp/bootstrap.env"
   }
 
   provisioner "remote-exec" {
     inline = [
-      "chmod 600 ${var.repo_path}/bootstrap/.env",
+      "sudo mv /tmp/bootstrap.env ${var.repo_path}/bootstrap/.env",
+      "sudo chmod 600 ${var.repo_path}/bootstrap/.env",
     ]
   }
 }
@@ -178,8 +183,8 @@ resource "null_resource" "bootstrap" {
 
   connection {
     type        = "ssh"
-    host        = var.ssh_host
-    user        = var.ssh_user
+    host        = local.effective_ssh_host
+    user        = local.effective_ssh_user
     port        = var.ssh_port
     agent       = local.use_ssh_agent
     private_key = local.ssh_private_key
@@ -206,8 +211,8 @@ resource "null_resource" "vpn_clients" {
 
   connection {
     type        = "ssh"
-    host        = var.ssh_host
-    user        = var.ssh_user
+    host        = local.effective_ssh_host
+    user        = local.effective_ssh_user
     port        = var.ssh_port
     agent       = local.use_ssh_agent
     private_key = local.ssh_private_key
@@ -215,7 +220,7 @@ resource "null_resource" "vpn_clients" {
 
   provisioner "remote-exec" {
     inline = [
-      "${var.repo_path}/bootstrap/scripts/vpn-client.sh sync '${join(",", var.vpn_clients)}'",
+      "sudo ${var.repo_path}/bootstrap/scripts/vpn-client.sh sync '${join(",", var.vpn_clients)}'",
     ]
   }
 }
@@ -235,8 +240,8 @@ resource "null_resource" "hardening" {
 
   connection {
     type        = "ssh"
-    host        = var.ssh_host
-    user        = var.ssh_user
+    host        = local.effective_ssh_host
+    user        = local.effective_ssh_user
     port        = var.ssh_port
     agent       = local.use_ssh_agent
     private_key = local.ssh_private_key
@@ -249,7 +254,7 @@ resource "null_resource" "hardening" {
       "echo '════════════════════════════════════════════════════════════════'",
       "echo '  PHASE 3: Hardening (VPN clients exist)'",
       "echo '════════════════════════════════════════════════════════════════'",
-      "bash ${var.repo_path}/bootstrap/core/06-harden.sh",
+      "sudo bash ${var.repo_path}/bootstrap/core/06-harden.sh",
       "echo ''",
       "echo '╔══════════════════════════════════════════════════════════════╗'",
       "echo '║           Hardening Complete ✓                              ║'",
@@ -265,12 +270,12 @@ resource "null_resource" "hardening" {
       "echo '════════════════════════════════════════════════════════════════'",
       "echo 'First client config (${var.vpn_clients[0]}):'",
       "echo '════════════════════════════════════════════════════════════════'",
-      "${var.repo_path}/bootstrap/scripts/vpn-client.sh show '${var.vpn_clients[0]}'",
+      "sudo ${var.repo_path}/bootstrap/scripts/vpn-client.sh show '${var.vpn_clients[0]}'",
       "echo ''",
       "echo '════════════════════════════════════════════════════════════════'",
       "echo 'QR Code (scan with WireGuard app):'",
       "echo '════════════════════════════════════════════════════════════════'",
-      "${var.repo_path}/bootstrap/scripts/vpn-client.sh qr '${var.vpn_clients[0]}'",
+      "sudo ${var.repo_path}/bootstrap/scripts/vpn-client.sh qr '${var.vpn_clients[0]}'",
     ]
   }
 }

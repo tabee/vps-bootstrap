@@ -171,3 +171,9 @@ variable "force_rerun" {
   type        = bool
   default     = false
 }
+
+variable "use_vpn" {
+  description = "Connect via VPN (set to true after initial deployment with hardening)"
+  type        = bool
+  default     = false
+}
