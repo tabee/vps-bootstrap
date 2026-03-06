@@ -45,6 +45,35 @@ REQUIRED_PACKAGES=(
   iproute2
 )
 
+# ── Prepare DNS resolution ──────────────────────────────────────────────────
+# Hetzner images often have dnsmasq pre-installed and listening on 127.0.0.53,
+# which conflicts with systemd-resolved. Stop it before package installation.
+prepare_dns_resolution() {
+  log_step "Preparing DNS resolution"
+
+  # Check if dnsmasq is running and conflicts with systemd-resolved
+  if systemctl is-active --quiet dnsmasq 2>/dev/null; then
+    log_info "Stopping pre-installed dnsmasq (conflicts with systemd-resolved)"
+    systemctl stop dnsmasq || true
+    # Don't disable yet - we'll configure it properly for VPN later
+  fi
+
+  # Ensure systemd-resolved can start and has upstream DNS
+  if ! systemctl is-active --quiet systemd-resolved; then
+    systemctl start systemd-resolved || true
+  fi
+
+  # Verify DNS actually works
+  if ! host -W 2 deb.debian.org 1.1.1.1 >/dev/null 2>&1; then
+    log_warn "DNS via 1.1.1.1 failed; configuring fallback"
+    echo "nameserver 1.1.1.1" > /etc/resolv.conf.tmp
+    cp /etc/resolv.conf /etc/resolv.conf.backup 2>/dev/null || true
+    mv /etc/resolv.conf.tmp /etc/resolv.conf
+  fi
+
+  log_info "DNS resolution ready"
+}
+
 install_packages() {
   log_step "Installing required packages"
 
@@ -328,6 +357,7 @@ main() {
   module_start "$BOOTSTRAP_MODULE"
   require_root
 
+  prepare_dns_resolution    # IMPORTANT: Fix DNS before apt runs
   install_packages
   disable_cloud_init        # IMPORTANT: Prevent cloud-init from overwriting our configs
   configure_hostname
