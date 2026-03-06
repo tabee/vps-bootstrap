@@ -5,10 +5,15 @@
 # Executes all modules in order to build a hardened VPS from a
 # fresh Debian 12 installation.
 #
+# INVOCATION:
+#   This script is normally called by Terraform (main.tf remote-exec).
+#   Direct invocation is for development/testing or manual server setup.
+#
 # Usage:
-#   sudo ./bootstrap/apply.sh              # Full apply
-#   sudo ./bootstrap/apply.sh --dry-run    # Dry-run (no changes)
-#   sudo ./bootstrap/apply.sh --skip-harden  # Skip final hardening
+#   terraform apply                         # Recommended: via Terraform
+#   sudo ./bootstrap/apply.sh               # Direct: full apply
+#   sudo ./bootstrap/apply.sh --dry-run     # Direct: dry-run (no changes)
+#   sudo ./bootstrap/apply.sh --skip-harden # Direct: skip final hardening
 #
 # Architecture:
 #   PHASE 1: Basis-Sicherheit (sofort aktiv)
