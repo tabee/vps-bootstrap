@@ -192,36 +192,21 @@ main() {
   [[ "$ENABLE_GOGCLI" == "true" ]] && run_service_module "gogcli"
   
   # ─────────────────────────────────────────────────────────────────────────
-  # PHASE 3: Lockdown
+  # PHASE 3: Lockdown (handled by Terraform after VPN clients are created)
   # ─────────────────────────────────────────────────────────────────────────
+  log_step "════════════════════════════════════════════════════════════════"
+  log_step "  PHASE 3: Lockdown"
+  log_step "════════════════════════════════════════════════════════════════"
+  
   if [[ "$SKIP_HARDEN" == "true" ]]; then
-    log_warn "════════════════════════════════════════════════════════════════"
-    log_warn "  PHASE 3: Hardening SKIPPED (--skip-harden)"
-    log_warn "════════════════════════════════════════════════════════════════"
-    log_warn "  ⚠️  SSH is still accessible via public IP!"
-    log_warn "  Run manually when VPN is configured:"
-    log_warn "    sudo bash ${SCRIPT_DIR}/core/06-harden.sh"
+    log_info "Hardening will be executed by Terraform after VPN clients exist."
+    log_info "This ensures you won't be locked out of SSH."
   else
-    log_step "════════════════════════════════════════════════════════════════"
-    log_step "  PHASE 3: Lockdown (VPN Checkpoint)"
-    log_step "════════════════════════════════════════════════════════════════"
-    
-    # VPN checkpoint: Ensure at least one peer is configured
+    # Manual run (not via Terraform) - check for VPN clients
     if ! grep -q "WireGuardPeer" /etc/systemd/network/99-wg0.netdev 2>/dev/null; then
-      log_warn "╔════════════════════════════════════════════════════════════════╗"
-      log_warn "║  WARNING: No WireGuard client configured!                     ║"
-      log_warn "╠════════════════════════════════════════════════════════════════╣"
-      log_warn "║  Hardening SKIPPED (lockout protection).                      ║"
-      log_warn "║                                                               ║"
-      log_warn "║  Create VPN client:                                          ║"
-      log_warn "║    sudo ${SCRIPT_DIR}/scripts/vpn-client.sh add admin        ║"
-      log_warn "║                                                               ║"
-      log_warn "║  Show config:                                                ║"
-      log_warn "║    sudo ${SCRIPT_DIR}/scripts/vpn-client.sh show admin       ║"
-      log_warn "║                                                               ║"
-      log_warn "║  After VPN connection, run hardening manually:               ║"
-      log_warn "║    sudo bash ${SCRIPT_DIR}/core/06-harden.sh                 ║"
-      log_warn "╚════════════════════════════════════════════════════════════════╝"
+      log_warn "No VPN clients configured - skipping hardening (lockout protection)"
+      log_warn "Create client: sudo ${SCRIPT_DIR}/scripts/vpn-client.sh add <name>"
+      log_warn "Then run:      sudo bash ${SCRIPT_DIR}/core/06-harden.sh"
     else
       run_core_module "06-harden"
     fi
@@ -240,14 +225,14 @@ main() {
     log_info "Dry-run complete. No changes were made."
   else
     log_info "System bootstrapped successfully."
-    echo "" >&2
-    log_info "VPN Client Config:"
-    log_info "  Show:  sudo ${SCRIPT_DIR}/scripts/vpn-client.sh show admin"
-    log_info "  QR:    sudo ${SCRIPT_DIR}/scripts/vpn-client.sh qr admin"
-    echo "" >&2
-    log_info "After connecting VPN:"
-    log_info "  SSH:   ssh ${ADMIN_USER}@10.100.0.1"
-    log_info "  Root:  sudo -i"
+    if [[ "$SKIP_HARDEN" == "true" ]]; then
+      log_info "Terraform will now create VPN clients and run hardening."
+    else
+      echo "" >&2
+      log_info "After connecting VPN:"
+      log_info "  SSH:   ssh ${ADMIN_USER}@10.100.0.1"
+      log_info "  Root:  sudo -i"
+    fi
   fi
 }
 

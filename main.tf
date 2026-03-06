@@ -96,7 +96,8 @@ N8N_ENCRYPTION_KEY="${random_password.n8n_encryption[0].result}"
 VPN_CLIENTS="${join(",", var.vpn_clients)}"
 EOT
 
-  bootstrap_command = var.skip_harden ? "sudo bash ${var.repo_path}/bootstrap/apply.sh --skip-harden" : "sudo bash ${var.repo_path}/bootstrap/apply.sh"
+  # Always skip hardening in apply.sh - Terraform runs it after VPN clients exist
+  bootstrap_command = "sudo bash ${var.repo_path}/bootstrap/apply.sh --skip-harden"
   
   # Use SSH-Agent when no explicit key is provided
   use_ssh_agent   = var.ssh_private_key == "" && var.ssh_private_key_path == ""
@@ -215,6 +216,54 @@ resource "null_resource" "vpn_clients" {
   provisioner "remote-exec" {
     inline = [
       "${var.repo_path}/bootstrap/scripts/vpn-client.sh sync '${join(",", var.vpn_clients)}'",
+    ]
+  }
+}
+
+# =============================================================================
+# Hardening (runs AFTER VPN clients exist)
+# =============================================================================
+
+resource "null_resource" "hardening" {
+  count      = var.skip_harden ? 0 : 1
+  depends_on = [null_resource.vpn_clients]
+
+  triggers = {
+    # Only run once per deployment, or when vpn_clients change
+    clients = join(",", var.vpn_clients)
+  }
+
+  connection {
+    type        = "ssh"
+    host        = var.ssh_host
+    user        = var.ssh_user
+    port        = var.ssh_port
+    agent       = local.use_ssh_agent
+    private_key = local.ssh_private_key
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "set -e",
+      "echo ''",
+      "echo '════════════════════════════════════════════════════════════════'",
+      "echo '  PHASE 3: Hardening (VPN clients exist)'",
+      "echo '════════════════════════════════════════════════════════════════'",
+      "bash ${var.repo_path}/bootstrap/core/06-harden.sh",
+      "echo ''",
+      "echo '╔══════════════════════════════════════════════════════════════╗'",
+      "echo '║           Hardening Complete ✓                              ║'",
+      "echo '╚══════════════════════════════════════════════════════════════╝'",
+      "echo ''",
+      "echo 'VPN Client Configs:'",
+      "for client in ${join(" ", var.vpn_clients)}; do echo \"  - $client: sudo ${var.repo_path}/bootstrap/scripts/vpn-client.sh show $client\"; done",
+      "echo ''",
+      "echo 'After connecting VPN:'",
+      "echo '  SSH:  ssh ${var.admin_user}@${local.vpn_server_ip}'",
+      "echo '  Root: sudo -i'",
+      "echo ''",
+      "echo 'First client QR code:'",
+      "${var.repo_path}/bootstrap/scripts/vpn-client.sh qr '${var.vpn_clients[0]}'",
     ]
   }
 }
