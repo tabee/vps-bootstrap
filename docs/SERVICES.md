@@ -148,7 +148,33 @@ gogcli benötigt **OAuth Client Credentials** von Google Cloud:
 2. **Create Credentials** → **OAuth client ID**
 3. Application type: **Desktop app**
 4. Name: z.B. `gogcli-server`
-5. **Download JSON** → Datei speichern als `credentials.json`
+5. Öffne den neuen Client unter **OAuth 2.0 Client IDs**
+
+**Variante A (klassische UI):**
+- **Download JSON** klicken und als `credentials.json` speichern
+
+**Variante B (neue UI, kein Download sichtbar):**
+- Im Client auf **Clientschlüssel hinzufügen** klicken
+- Neuen Secret erstellen und **sofort kopieren**
+- `credentials.json` lokal manuell erstellen (Beispiel):
+
+```json
+{
+  "installed": {
+    "client_id": "<DEIN_CLIENT_ID>.apps.googleusercontent.com",
+    "project_id": "<DEIN_PROJECT_ID>",
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token",
+    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+    "client_secret": "<DEIN_NEUER_CLIENT_SECRET>",
+    "redirect_uris": [
+      "http://localhost"
+    ]
+  }
+}
+```
+
+> Wenn du den Secret-Wert nicht gespeichert hast: neuen Secret erzeugen. Alte Werte sind oft nicht mehr einsehbar.
 
 #### 2. Credentials auf Server kopieren
 
