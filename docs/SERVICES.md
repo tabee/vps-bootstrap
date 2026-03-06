@@ -47,7 +47,7 @@ All services run as Docker containers behind Traefik reverse proxy with automati
 | Gitea | 3000 | `https://gitea.DOMAIN` | `install_gitea = true` |
 | n8n | 5678 | `https://n8n.DOMAIN` | `install_n8n = true` |
 | whoami | 80 | `https://whoami.DOMAIN` | `install_whoami = true` |
-| gogcli | - | CLI tool | `install_gogcli = true` |
+| gogcli | - | VPN+SSH only | `install_gogcli = true` |
 
 ---
 
@@ -120,7 +120,7 @@ install_whoami = true
 
 ## gogcli
 
-GOG.com command-line download client. Installed as binary, not a container.
+Google CLI Tool für Workspace/Drive Operationen. Installiert als Binary, kein Container.
 
 > ⚠️ **Access:** Nur via VPN + SSH erreichbar (kein Web-Interface).
 
@@ -131,40 +131,70 @@ GOG.com command-line download client. Installed as binary, not a container.
 └──────────┘              └────────────┘              └─────────┘
 ```
 
-### Configuration
+### Terraform Configuration
 
 ```hcl
 install_gogcli   = true
 gogcli_version   = "1.1.3"  # Optional, default: 1.1.3
 ```
 
+### Setup (einmalig)
+
+gogcli benötigt **OAuth Client Credentials** von Google Cloud:
+
+#### 1. OAuth Credentials erstellen
+
+1. Öffne [Google Cloud Console → APIs & Credentials](https://console.cloud.google.com/apis/credentials)
+2. **Create Credentials** → **OAuth client ID**
+3. Application type: **Desktop app**
+4. Name: z.B. `gogcli-server`
+5. **Download JSON** → Datei speichern als `credentials.json`
+
+#### 2. Credentials auf Server kopieren
+
+```bash
+# Von deinem lokalen Rechner (VPN muss verbunden sein):
+scp credentials.json admin@10.100.0.1:/tmp/
+
+# Auf dem Server:
+ssh admin@10.100.0.1
+mkdir -p ~/.config/gogcli
+mv /tmp/credentials.json ~/.config/gogcli/credentials.json
+```
+
+#### 3. Mit Google authentifizieren
+
+```bash
+# Credentials registrieren
+gog auth credentials ~/.config/gogcli/credentials.json
+
+# Account hinzufügen (öffnet Browser-URL zum Kopieren)
+gog auth add your-email@gmail.com --services user --manual
+
+# Folge den Anweisungen: URL öffnen → Code kopieren → einfügen
+```
+
 ### Usage
 
 ```bash
-# 1. Connect VPN
-# 2. SSH into server
-ssh admin@10.100.0.1
+# Services auflisten
+gog list
 
-# 3. Authenticate (one-time, interactive)
-gog login
-
-# 4. Use CLI
-gog owned              # List games
-gog download <id>      # Download game
+# Dateien synchronisieren
+gog sync <service>
 ```
 
-### Authentication & Credentials
+### Dateispeicherorte
 
-Die Authentifizierung erfolgt interaktiv via `gog login`. Credentials werden lokal gespeichert:
+| Datei | Pfad |
+|-------|------|
+| OAuth Credentials | `~/.config/gogcli/credentials.json` |
+| Auth Tokens | `~/.config/gogcli/token.json` |
+| Cache | `~/.cache/gogcli/` |
 
-- **Token-Datei:** `~/.config/gog/token.json`
-- **Manifest-Cache:** `~/.cache/gog/`
+📖 **Vollständige Dokumentation:** [Magnushhoie/gogcli](https://github.com/Magnushhoie/gogcli)
 
-📖 **Vollständige Dokumentation:**
-- GitHub: [Magnushhoie/gogcli](https://github.com/Magnushhoie/gogcli)
-- Auth-Details: [gogcli Wiki – Authentication](https://github.com/Magnushhoie/gogcli#authentication)
-
-> **Tipp:** Für automatisierte Downloads (Cronjobs) kann das Token manuell in `~/.config/gog/token.json` hinterlegt werden.
+> **Sicherheit:** Die `credentials.json` enthält deine OAuth Client ID/Secret. Nicht öffentlich teilen!
 
 ### Binary Location
 
