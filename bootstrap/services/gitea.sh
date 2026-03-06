@@ -35,9 +35,10 @@ if [[ -f "${SCRIPT_DIR}/.env" ]]; then
   source "${SCRIPT_DIR}/.env"
 fi
 
-DB_PASSWORD="${DB_PASSWORD:-__DB_PASSWORD__}"
-GITEA_SECRET_KEY="${GITEA_SECRET_KEY:-__GITEA_SECRET_KEY__}"
-GITEA_INTERNAL_TOKEN="${GITEA_INTERNAL_TOKEN:-__GITEA_INTERNAL_TOKEN__}"
+# Variables from Terraform-generated .env
+GITEA_DB_PASSWORD="${GITEA_DB_PASSWORD:-}"
+GITEA_SECRET_KEY="${GITEA_SECRET_KEY:-}"
+GITEA_INTERNAL_TOKEN="${GITEA_INTERNAL_TOKEN:-}"
 VPN_DOMAIN="${VPN_DOMAIN:-example.com}"
 
 GITEA_DIR="/opt/gitea"
@@ -169,14 +170,17 @@ install_env_file() {
 
   local env_file="${GITEA_DIR}/.env"
 
-  if [[ "$DB_PASSWORD" == "__DB_PASSWORD__" ]]; then
-    log_warn "DB_PASSWORD not set — using placeholder"
+  if [[ -z "$GITEA_DB_PASSWORD" ]]; then
+    log_warn "GITEA_DB_PASSWORD not set — generating random password"
+    GITEA_DB_PASSWORD=$(openssl rand -hex 16)
   fi
-  if [[ "$GITEA_SECRET_KEY" == "__GITEA_SECRET_KEY__" ]]; then
-    log_warn "GITEA_SECRET_KEY not set — using placeholder"
+  if [[ -z "$GITEA_SECRET_KEY" ]]; then
+    log_warn "GITEA_SECRET_KEY not set — generating random key"
+    GITEA_SECRET_KEY=$(openssl rand -hex 32)
   fi
-  if [[ "$GITEA_INTERNAL_TOKEN" == "__GITEA_INTERNAL_TOKEN__" ]]; then
-    log_warn "GITEA_INTERNAL_TOKEN not set — using placeholder"
+  if [[ -z "$GITEA_INTERNAL_TOKEN" ]]; then
+    log_warn "GITEA_INTERNAL_TOKEN not set — generating random token"
+    GITEA_INTERNAL_TOKEN=$(openssl rand -hex 32)
   fi
 
   local content
@@ -187,7 +191,7 @@ VPN_DOMAIN=${VPN_DOMAIN}
 # PostgreSQL
 POSTGRES_DB=gitea
 POSTGRES_USER=gitea
-POSTGRES_PASSWORD=${DB_PASSWORD}
+POSTGRES_PASSWORD=${GITEA_DB_PASSWORD}
 
 # Gitea secrets
 GITEA_SECRET_KEY=${GITEA_SECRET_KEY}
