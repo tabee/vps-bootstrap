@@ -71,6 +71,12 @@ vpn_clients = ["admin", "laptop", "phone"]
 
 **Services:** See [docs/SERVICES.md](docs/SERVICES.md)
 
+For `gogcli` OAuth setup (Google Console old/new UI):
+- with **Download JSON** button
+- or without download (create new client secret and build `credentials.json` manually)
+
+See the `gogcli` section in [docs/SERVICES.md](docs/SERVICES.md) for the exact steps.
+
 ---
 
 ## VPN Setup
