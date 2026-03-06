@@ -262,7 +262,14 @@ resource "null_resource" "hardening" {
       "echo '  SSH:  ssh ${var.admin_user}@${local.vpn_server_ip}'",
       "echo '  Root: sudo -i'",
       "echo ''",
-      "echo 'First client QR code:'",
+      "echo '════════════════════════════════════════════════════════════════'",
+      "echo 'First client config (${var.vpn_clients[0]}):'",
+      "echo '════════════════════════════════════════════════════════════════'",
+      "${var.repo_path}/bootstrap/scripts/vpn-client.sh show '${var.vpn_clients[0]}'",
+      "echo ''",
+      "echo '════════════════════════════════════════════════════════════════'",
+      "echo 'QR Code (scan with WireGuard app):'",
+      "echo '════════════════════════════════════════════════════════════════'",
       "${var.repo_path}/bootstrap/scripts/vpn-client.sh qr '${var.vpn_clients[0]}'",
     ]
   }
