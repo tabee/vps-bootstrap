@@ -169,14 +169,22 @@ setup_user_environment() {
   local admin_home
   admin_home=$(getent passwd "$ADMIN_USER" | cut -d: -f6)
 
-  # Create gog config symlink in user's home
-  local user_config="${admin_home}/.config/gog"
+  # Create gogcli config symlink in user's home
+  local user_config="${admin_home}/.config/gogcli"
   if [[ ! -L "$user_config" ]] && [[ ! -d "$user_config" ]]; then
     mkdir -p "${admin_home}/.config"
     ln -sf "$GOGCLI_DIR" "$user_config"
     chown -h "${ADMIN_USER}:${ADMIN_USER}" "$user_config"
     chown "${ADMIN_USER}:${ADMIN_USER}" "${admin_home}/.config"
     log_info "Created config symlink: $user_config -> $GOGCLI_DIR"
+  fi
+
+  # Backward compatibility for older docs/tools expecting ~/.config/gog
+  local legacy_config="${admin_home}/.config/gog"
+  if [[ ! -L "$legacy_config" ]] && [[ ! -d "$legacy_config" ]]; then
+    ln -sf "$GOGCLI_DIR" "$legacy_config"
+    chown -h "${ADMIN_USER}:${ADMIN_USER}" "$legacy_config"
+    log_info "Created legacy config symlink: $legacy_config -> $GOGCLI_DIR"
   fi
 
   # Add gog to PATH if not already there (via profile.d)
