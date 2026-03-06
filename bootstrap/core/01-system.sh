@@ -35,6 +35,7 @@ REQUIRED_PACKAGES=(
   wireguard-tools
   nftables
   dnsmasq
+  fail2ban
   curl
   ca-certificates
   gnupg

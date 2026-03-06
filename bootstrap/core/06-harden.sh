@@ -159,8 +159,17 @@ configure_sudo() {
 harden_fail2ban() {
   log_step "Tightening Fail2ban configuration"
   
+  # Check if fail2ban is installed
+  if ! command -v fail2ban-client &>/dev/null; then
+    log_warn "Fail2ban not installed, skipping"
+    return 0
+  fi
+  
   # Remove bootstrap-mode config (lenient limits)
-  rm -f /etc/fail2ban/jail.d/00-bootstrap.conf
+  rm -f /etc/fail2ban/jail.d/00-bootstrap.conf 2>/dev/null || true
+  
+  # Ensure jail.d directory exists
+  mkdir -p /etc/fail2ban/jail.d
   
   local config_file="/etc/fail2ban/jail.d/sshd.conf"
   local content
