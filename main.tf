@@ -81,6 +81,7 @@ ENABLE_GITEA="${var.enable_gitea}"
 ENABLE_N8N="${var.enable_n8n}"
 ENABLE_WHOAMI="${var.enable_whoami}"
 ENABLE_GOGCLI="${var.enable_gogcli}"
+ENABLE_UPTIME_KUMA="${var.enable_uptime_kuma}"
 
 # ── Service Secrets ──────────────────────────────────────────────────────────
 %{if var.enable_gitea~}

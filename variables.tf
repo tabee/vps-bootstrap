@@ -104,6 +104,12 @@ variable "enable_gogcli" {
   default     = false
 }
 
+variable "enable_uptime_kuma" {
+  description = "Install Uptime Kuma monitoring service? (Docker, Traefik access at status.domain.com)"
+  type        = bool
+  default     = false
+}
+
 # ═══════════════════════════════════════════════════════════════════════════
 # GOGCLI - Google OAuth Credentials (optional, can be set later manually)
 # ═══════════════════════════════════════════════════════════════════════════
