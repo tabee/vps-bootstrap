@@ -579,7 +579,7 @@ create_gitea_repo() {
   # Wait for Gitea API to be ready
   log_info "Waiting for Gitea API..."
   local i=0
-  while [[ $i -lt 120 ]]; do
+  while [[ $i -lt 30 ]]; do
     if docker exec gitea curl -sf http://localhost:3000/api/v1/version >/dev/null 2>&1; then
       log_info "Gitea API is reachable"
       break
@@ -588,7 +588,7 @@ create_gitea_repo() {
     i=$((i + 3))
   done
 
-  if [[ $i -ge 120 ]]; then
+  if [[ $i -ge 30 ]]; then
     log_warn "Gitea API did not become ready in time — skipping repo creation"
     return 0
   fi

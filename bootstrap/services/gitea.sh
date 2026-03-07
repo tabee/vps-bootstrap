@@ -265,6 +265,55 @@ EOF
   install_content "$content" "$env_file" "0600"
 }
 
+# ── Keep existing app.ini DB password in sync ──────────────────────────────
+sync_app_ini_db_password() {
+  log_step "Ensuring Gitea app.ini database password is in sync"
+
+  local app_ini="${GITEA_DIR}/gitea-data/gitea/conf/app.ini"
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    log_info "Would ensure database PASSWD in ${app_ini} matches POSTGRES_PASSWORD"
+    return 0
+  fi
+
+  if [[ ! -f "$app_ini" ]]; then
+    log_info "No existing app.ini yet (first run)"
+    return 0
+  fi
+
+  if [[ -z "$GITEA_DB_PASSWORD" ]]; then
+    log_warn "GITEA_DB_PASSWORD empty — cannot sync app.ini"
+    return 0
+  fi
+
+  APP_INI="$app_ini" GITEA_DB_PASSWORD="$GITEA_DB_PASSWORD" python3 - <<'PY'
+from pathlib import Path
+import configparser
+import os
+
+path = Path(os.environ["APP_INI"])
+target = os.environ["GITEA_DB_PASSWORD"]
+
+cfg = configparser.ConfigParser()
+cfg.optionxform = str
+cfg.read(path)
+
+if not cfg.has_section("database"):
+    raise SystemExit(0)
+
+current = cfg.get("database", "PASSWD", fallback="")
+if current == target:
+    raise SystemExit(0)
+
+cfg.set("database", "PASSWD", target)
+with path.open("w", encoding="utf-8") as f:
+    cfg.write(f)
+print("updated")
+PY
+
+  log_info "app.ini database password checked/synced"
+}
+
 # ── Deploy Gitea stack ──────────────────────────────────────────────────────
 deploy_gitea() {
   log_step "Deploying Gitea stack"
@@ -353,7 +402,7 @@ create_admin_user() {
     --password "${GITEA_ADMIN_PASSWORD}" \
     --email "${GITEA_ADMIN_EMAIL}" \
     --admin \
-    --must-change-password=false 2>&1 || {
+    --must-change-password=false >/dev/null 2>&1 || {
       log_warn "Admin user creation failed (may already exist)"
       return 0
     }
@@ -461,6 +510,7 @@ main() {
   setup_directories
   install_compose_file
   install_env_file
+  sync_app_ini_db_password
   deploy_gitea
   create_admin_user
   setup_tea_alias
