@@ -55,6 +55,35 @@ variable "acme_email" {
   }
 }
 
+variable "letsencrypt_enabled" {
+  description = "Enable Let's Encrypt certificate management in Traefik"
+  type        = bool
+  default     = true
+}
+
+variable "letsencrypt_staging" {
+  description = "Use Let's Encrypt staging CA to avoid production rate limits during testing"
+  type        = bool
+  default     = false
+}
+
+variable "letsencrypt_require_whoami_check" {
+  description = "Require a successful HTTPS preflight against whoami.<domain> before first issuance or renewal"
+  type        = bool
+  default     = true
+}
+
+variable "letsencrypt_renew_before_days" {
+  description = "Only attempt certificate renewal when the existing certificate expires within this many days"
+  type        = number
+  default     = 30
+
+  validation {
+    condition     = var.letsencrypt_renew_before_days >= 1 && var.letsencrypt_renew_before_days <= 90
+    error_message = "letsencrypt_renew_before_days must be between 1 and 90."
+  }
+}
+
 # ═══════════════════════════════════════════════════════════════════════════
 # SSH OPTIONS
 # ═══════════════════════════════════════════════════════════════════════════

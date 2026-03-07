@@ -46,6 +46,12 @@ domain            = "example.com"
 hetzner_dns_token = "your-token"
 acme_email        = "you@example.com"
 
+# Let's Encrypt / ACME policy
+letsencrypt_enabled              = true
+letsencrypt_staging              = false
+letsencrypt_require_whoami_check = true
+letsencrypt_renew_before_days    = 30
+
 # Optional services (see docs/SERVICES.md)
 enable_gitea  = false   # Git server
 enable_n8n    = false   # Workflow automation
@@ -65,9 +71,22 @@ vpn_clients = ["admin", "laptop", "phone"]
 | `domain` | ✓ | Your domain |
 | `hetzner_dns_token` | ✓ | DNS API token for Let's Encrypt |
 | `acme_email` | ✓ | Email for Let's Encrypt |
+| `letsencrypt_enabled` | | Master switch for Let's Encrypt issuance/renewal |
+| `letsencrypt_staging` | | Use Let's Encrypt staging to avoid production rate limits |
+| `letsencrypt_require_whoami_check` | | Require successful HTTPS preflight on `whoami.<domain>` before first issue/renew |
+| `letsencrypt_renew_before_days` | | Only renew when the current cert expires within this window |
 | `vpn_clients` | | VPN devices (default: `["admin"]`) |
 | `admin_user` | | SSH user after hardening (default: `admin`) |
 | `use_vpn` | | Set `true` after first deploy for updates via VPN |
+
+### Let's Encrypt behavior
+
+- `letsencrypt_enabled = false` → no Let's Encrypt request is made.
+- `letsencrypt_staging = true` → safe test mode, avoids production rate limits, but browsers will show the cert as untrusted.
+- `letsencrypt_require_whoami_check = true` → bootstrap first verifies `https://whoami.<domain>` locally via Traefik. If that check fails, bootstrap aborts **before** contacting Let's Encrypt.
+- `letsencrypt_renew_before_days = 30` → if an existing wildcard cert is still valid for more than 30 days, no renewal attempt is made.
+
+> If `letsencrypt_require_whoami_check = true`, keep `enable_whoami = true`. The `whoami` service is used as the HTTPS preflight target.
 
 **Services:** See [docs/SERVICES.md](docs/SERVICES.md)
 

@@ -72,6 +72,10 @@ VPN_DOMAIN="${var.domain}"
 VPN_HOSTNAME="${var.hostname}"
 HETZNER_API_TOKEN="${var.hetzner_dns_token}"
 ACME_EMAIL="${var.acme_email}"
+LETSENCRYPT_ENABLED="${var.letsencrypt_enabled}"
+LETSENCRYPT_STAGING="${var.letsencrypt_staging}"
+LETSENCRYPT_REQUIRE_WHOAMI_CHECK="${var.letsencrypt_require_whoami_check}"
+LETSENCRYPT_RENEW_BEFORE_DAYS="${var.letsencrypt_renew_before_days}"
 
 # ── Admin User ───────────────────────────────────────────────────────────────
 ADMIN_USER="${var.admin_user}"

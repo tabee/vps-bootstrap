@@ -112,6 +112,8 @@ n8n is exposed to the internet. Consider restricting access via additional Traef
 
 Simple diagnostic container that echoes HTTP request headers. Useful for testing Traefik routing.
 
+It is also used as the default Let's Encrypt preflight target when `letsencrypt_require_whoami_check = true`.
+
 ### Configuration
 
 ```hcl
@@ -122,6 +124,25 @@ install_whoami = true
 
 - URL: `https://whoami.YOUR_DOMAIN`
 - Shows: IP, headers, hostname
+
+### Let's Encrypt preflight
+
+When Let's Encrypt is enabled, bootstrap can first validate the HTTPS path against `whoami.YOUR_DOMAIN`.
+
+- If the preflight succeeds, Traefik is allowed to issue or renew certificates.
+- If it fails, bootstrap stops before contacting Let's Encrypt.
+- This reduces the chance of hitting production rate limits during broken deployments.
+
+Use these Terraform variables centrally in `terraform.tfvars`:
+
+```hcl
+letsencrypt_enabled              = true
+letsencrypt_staging              = false
+letsencrypt_require_whoami_check = true
+letsencrypt_renew_before_days    = 30
+```
+
+For safe dry-runs against Let's Encrypt itself, set `letsencrypt_staging = true`.
 
 ---
 

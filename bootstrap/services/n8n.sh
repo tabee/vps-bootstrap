@@ -46,6 +46,18 @@ OPENAI_API_KEY="${OPENAI_API_KEY:-__OPENAI_API_KEY__}"
 
 N8N_DIR="/opt/n8n"
 TRAEFIK_DYNAMIC="/opt/traefik/dynamic.yml"
+TRAEFIK_ACME_STATE_FILE="/opt/traefik/.acme-active"
+
+traefik_https_tls_block() {
+  if [[ -f "$TRAEFIK_ACME_STATE_FILE" ]] && grep -qx 'true' "$TRAEFIK_ACME_STATE_FILE"; then
+    cat <<'YAML'
+      tls:
+        certResolver: le
+YAML
+  else
+    echo '      tls: {}'
+  fi
+}
 
 # ── Create directory structure ───────────────────────────────────────────────
 setup_directories() {
@@ -227,12 +239,16 @@ patch_traefik_routes() {
 
   # IMPORTANT: This heredoc is single-quoted so bash does NOT interpret backticks
   # in the Traefik Host(`...`) rule.
-  VPN_DOMAIN="$VPN_DOMAIN" TRAEFIK_DYNAMIC="$TRAEFIK_DYNAMIC" python3 - <<'PY'
+  local tls_block
+  tls_block="$(traefik_https_tls_block)"
+
+  VPN_DOMAIN="$VPN_DOMAIN" TRAEFIK_DYNAMIC="$TRAEFIK_DYNAMIC" TLS_BLOCK="$tls_block" python3 - <<'PY'
 from pathlib import Path
 import os
 
 vpn_domain = os.environ["VPN_DOMAIN"]
 path = os.environ["TRAEFIK_DYNAMIC"]
+tls_block = os.environ["TLS_BLOCK"]
 p = Path(path)
 text = p.read_text(encoding="utf-8")
 
@@ -244,8 +260,7 @@ router_snip = f"""
       rule: \"Host(`8n8.{vpn_domain}`)\"
       middlewares: [\"vpn-only\"]
       service: 8n8-svc
-      tls:
-        certResolver: le
+{tls_block}
 """
 
 service_snip = """

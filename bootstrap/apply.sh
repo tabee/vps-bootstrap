@@ -72,6 +72,8 @@ Environment:
     ENABLE_WHOAMI=true/false  Install whoami test service
     ENABLE_GOGCLI=true/false  Install Google Workspace CLI (SSH-Zugriff)
     ADMIN_USER=admin          SSH user after hardening
+    LETSENCRYPT_ENABLED=true/false
+    LETSENCRYPT_STAGING=true/false
 EOF
       exit 0
       ;;
@@ -184,11 +186,14 @@ main() {
   
   run_core_module "04-docker"
   run_core_module "05-traefik"
+  [[ "$ENABLE_WHOAMI" == "true" ]] && run_service_module "whoami"
+
+  log_step "▶ 05-traefik (Let's Encrypt policy)"
+  bash "${SCRIPT_DIR}/core/05-traefik.sh" --post-deploy-acme
   
   # Optional services
   [[ "$ENABLE_GITEA" == "true" ]] && run_service_module "gitea"
   [[ "$ENABLE_N8N" == "true" ]] && run_service_module "n8n"
-  [[ "$ENABLE_WHOAMI" == "true" ]] && run_service_module "whoami"
   [[ "$ENABLE_GOGCLI" == "true" ]] && run_service_module "gogcli"
   
   # ─────────────────────────────────────────────────────────────────────────

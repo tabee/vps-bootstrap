@@ -34,6 +34,20 @@ source "${SCRIPT_DIR}/lib/backup.sh"
 
 BOOTSTRAP_MODULE="traefik"
 
+TRAEFIK_MODE="install"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --post-deploy-acme)
+      TRAEFIK_MODE="post-deploy-acme"
+      shift
+      ;;
+    *)
+      log_fatal "Unknown option: $1"
+      ;;
+  esac
+done
+
 # Load environment
 if [[ -f "${SCRIPT_DIR}/.env" ]]; then
   # shellcheck source=/dev/null
@@ -43,8 +57,141 @@ fi
 HETZNER_API_TOKEN="${HETZNER_API_TOKEN:-__ACME_DNS_TOKEN__}"
 ACME_EMAIL="${ACME_EMAIL:-admin@example.com}"
 VPN_DOMAIN="${VPN_DOMAIN:-example.com}"
+ENABLE_WHOAMI="${ENABLE_WHOAMI:-true}"
+LETSENCRYPT_ENABLED="${LETSENCRYPT_ENABLED:-true}"
+LETSENCRYPT_STAGING="${LETSENCRYPT_STAGING:-false}"
+LETSENCRYPT_REQUIRE_WHOAMI_CHECK="${LETSENCRYPT_REQUIRE_WHOAMI_CHECK:-true}"
+LETSENCRYPT_RENEW_BEFORE_DAYS="${LETSENCRYPT_RENEW_BEFORE_DAYS:-30}"
 
 TRAEFIK_DIR="/opt/traefik"
+ACME_STORAGE_FILE="${TRAEFIK_DIR}/letsencrypt/acme.json"
+ACME_STATE_FILE="${TRAEFIK_DIR}/.acme-active"
+
+is_true() {
+  [[ "${1,,}" == "true" ]]
+}
+
+write_acme_state_file() {
+  local state="$1"
+
+  if file_matches "$ACME_STATE_FILE" "$state"; then
+    log_info "ACME state already set to ${state}"
+    return 0
+  fi
+
+  install_content "$state" "$ACME_STATE_FILE" "0644"
+}
+
+extract_existing_certificate() {
+  if [[ ! -s "$ACME_STORAGE_FILE" ]]; then
+    return 1
+  fi
+
+  jq -r --arg wildcard "*.${VPN_DOMAIN}" --arg root "${VPN_DOMAIN}" '
+    [ .. | objects | select(has("Certificates")) | .Certificates[]? |
+      select(
+        .domain.main == $wildcard or
+        .domain.main == $root or
+        ((.domain.sans // []) | index($wildcard)) != null or
+        ((.domain.sans // []) | index($root)) != null
+      ) |
+      .certificate
+    ] | first // empty
+  ' "$ACME_STORAGE_FILE"
+}
+
+certificate_days_remaining() {
+  local cert_pem
+  cert_pem="$(extract_existing_certificate 2>/dev/null || true)"
+
+  if [[ -z "$cert_pem" || "$cert_pem" == "null" ]]; then
+    echo -1
+    return 0
+  fi
+
+  local tmp_cert end_date end_epoch now_epoch
+  tmp_cert="$(mktemp)"
+  trap 'rm -f "$tmp_cert"' RETURN
+  printf '%s\n' "$cert_pem" > "$tmp_cert"
+
+  end_date="$(openssl x509 -in "$tmp_cert" -noout -enddate 2>/dev/null | cut -d= -f2- || true)"
+  if [[ -z "$end_date" ]]; then
+    echo -1
+    return 0
+  fi
+
+  end_epoch="$(date -u -d "$end_date" +%s 2>/dev/null || true)"
+  now_epoch="$(date -u +%s)"
+
+  if [[ -z "$end_epoch" ]]; then
+    echo -1
+    return 0
+  fi
+
+  echo $(((end_epoch - now_epoch) / 86400))
+}
+
+initial_acme_state() {
+  if ! is_true "$LETSENCRYPT_ENABLED"; then
+    log_warn "Let's Encrypt is disabled via configuration"
+    echo false
+    return 0
+  fi
+
+  local days_remaining
+  days_remaining="$(certificate_days_remaining)"
+
+  if (( days_remaining < 0 )); then
+    log_info "No existing wildcard certificate found - deferring Let's Encrypt activation until HTTPS preflight passes"
+    echo false
+    return 0
+  fi
+
+  if (( days_remaining <= LETSENCRYPT_RENEW_BEFORE_DAYS )); then
+    log_warn "Existing certificate expires in ${days_remaining} day(s) - renewal will wait for HTTPS preflight"
+    echo false
+    return 0
+  fi
+
+  log_info "Existing certificate is still valid for ${days_remaining} day(s) - no renewal needed"
+  echo true
+}
+
+router_tls_block() {
+  local acme_active="$1"
+
+  if [[ "$acme_active" == "true" ]]; then
+    cat <<'YAML'
+      tls:
+        certResolver: le
+YAML
+  else
+    echo '      tls: {}'
+  fi
+}
+
+verify_whoami_https() {
+  local whoami_host="whoami.${VPN_DOMAIN}"
+
+  log_step "Checking HTTPS route: https://${whoami_host}"
+
+  if ! is_true "$ENABLE_WHOAMI"; then
+    log_fatal "Let's Encrypt preflight requires enable_whoami=true, or disable letsencrypt_require_whoami_check"
+  fi
+
+  if ! curl --silent --show-error --fail --insecure \
+    --connect-timeout 10 \
+    --max-time 20 \
+    --output /dev/null \
+    --resolve "${whoami_host}:443:10.20.0.10" \
+    "https://${whoami_host}/"; then
+    log_error "HTTPS preflight failed for https://${whoami_host}"
+    log_error "Skipping Let's Encrypt request to avoid unnecessary rate limits"
+    return 1
+  fi
+
+  log_info "✅ HTTPS preflight for https://${whoami_host} succeeded"
+}
 
 # ── Create directory structure ───────────────────────────────────────────────
 setup_directories() {
@@ -64,9 +211,44 @@ setup_directories() {
 
 # ── Generate traefik.yml (static config) ─────────────────────────────────────
 install_traefik_config() {
+  local acme_active="${1:-false}"
+
   log_step "Installing Traefik static configuration"
 
   local config_file="${TRAEFIK_DIR}/traefik.yml"
+  local acme_block=""
+  local acme_ca_server_block=""
+
+  if [[ "$acme_active" == "true" ]]; then
+    if is_true "$LETSENCRYPT_STAGING"; then
+      acme_ca_server_block='      caServer: https://acme-staging-v02.api.letsencrypt.org/directory'
+      log_warn "Let's Encrypt staging mode enabled (certificates will NOT be browser-trusted)"
+    fi
+
+    acme_block="$(cat <<YAML
+# ── ACME / Let's Encrypt ────────────────────────────────────────────────────
+# DNS-01 challenge via Hetzner DNS API.
+# This allows TLS certificate provisioning WITHOUT exposing any HTTP port
+# to the public internet. The only public port is UDP/51820 (WireGuard).
+certificatesResolvers:
+  le:
+    acme:
+      email: ${ACME_EMAIL}
+${acme_ca_server_block}
+      storage: /letsencrypt/acme.json
+      dnsChallenge:
+        provider: hetzner
+        # Wait 60s after setting TXT record before asking Let's Encrypt to validate.
+        # Hetzner DNS propagation can take 30-60s — without this delay,
+        # secondary validators see stale/wrong TXT records → 403 Unauthorized.
+        propagation:
+          delayBeforeChecks: 60s
+        resolvers:
+          - "1.1.1.1:53"
+          - "9.9.9.9:53"
+YAML
+)"
+  fi
 
   local content
   content="$(cat <<YAML
@@ -101,24 +283,7 @@ providers:
     filename: /etc/traefik/dynamic.yml
     watch: true
 
-# ── ACME / Let's Encrypt ────────────────────────────────────────────────────
-# DNS-01 challenge via Hetzner DNS API.
-# This allows TLS certificate provisioning WITHOUT exposing any HTTP port
-# to the public internet. The only public port is UDP/51820 (WireGuard).
-certificatesResolvers:
-  le:
-    acme:
-      email: ${ACME_EMAIL}
-      storage: /letsencrypt/acme.json
-      dnsChallenge:
-        provider: hetzner
-        # Wait 60s after setting TXT record before asking Let's Encrypt to validate.
-        # Hetzner DNS propagation can take 30-60s — without this delay,
-        # secondary validators see stale/wrong TXT records → 403 Unauthorized.
-        delayBeforeCheck: 60
-        resolvers:
-          - "1.1.1.1:53"
-          - "9.9.9.9:53"
+${acme_block}
 
 # ── API / Dashboard ─────────────────────────────────────────────────────────
 # DISABLED. Dashboard exposes internal routing information and
@@ -139,9 +304,34 @@ YAML
 
 # ── Generate dynamic.yml (routing rules) ─────────────────────────────────────
 install_dynamic_config() {
+  local acme_active="${1:-false}"
+
   log_step "Installing Traefik dynamic configuration"
 
   local config_file="${TRAEFIK_DIR}/dynamic.yml"
+  local https_tls_block default_tls_store
+
+  https_tls_block="$(router_tls_block "$acme_active")"
+
+  if [[ "$acme_active" == "true" ]]; then
+    default_tls_store="$(cat <<YAML
+# ── TLS: wildcard certificate ────────────────────────────────────────────────
+# Request a single *.${VPN_DOMAIN} wildcard cert via DNS-01 (Hetzner).
+# This covers ALL subdomains (git, whoami, 8n8, ...) with one cert.
+tls:
+  stores:
+    default:
+      defaultGeneratedCert:
+        resolver: le
+        domain:
+          main: "*.${VPN_DOMAIN}"
+          sans:
+            - "${VPN_DOMAIN}"
+YAML
+)"
+  else
+    default_tls_store=''
+  fi
 
   # Dynamic config defines all routes and middlewares.
   # vpn-only middleware ensures only VPN clients (10.100.0.0/24)
@@ -173,8 +363,7 @@ http:
       rule: "Host(\`whoami.${VPN_DOMAIN}\`)"
       middlewares: ["vpn-only"]
       service: whoami-svc
-      tls:
-        certResolver: le
+${https_tls_block}
 
     # Gitea web UI
     git-web:
@@ -182,8 +371,7 @@ http:
       rule: "Host(\`git.${VPN_DOMAIN}\`)"
       middlewares: ["vpn-only"]
       service: git-web-svc
-      tls:
-        certResolver: le
+${https_tls_block}
 
   services:
     whoami-svc:
@@ -220,18 +408,7 @@ tcp:
         servers:
           - address: "10.20.0.30:2222"
 
-# ── TLS: wildcard certificate ────────────────────────────────────────────────
-# Request a single *.${VPN_DOMAIN} wildcard cert via DNS-01 (Hetzner).
-# This covers ALL subdomains (git, whoami, 8n8, ...) with one cert.
-tls:
-  stores:
-    default:
-      defaultGeneratedCert:
-        resolver: le
-        domain:
-          main: "*.${VPN_DOMAIN}"
-          sans:
-            - "${VPN_DOMAIN}"
+${default_tls_store}
 YAML
 )"
 
@@ -325,6 +502,17 @@ install_env_file() {
   install_content "$content" "$env_file" "0600"
 }
 
+configure_traefik_stack() {
+  local acme_active="$1"
+
+  setup_directories
+  install_traefik_config "$acme_active"
+  install_dynamic_config "$acme_active"
+  install_compose_file
+  install_env_file
+  write_acme_state_file "$acme_active"
+}
+
 # ── Deploy Traefik stack ─────────────────────────────────────────────────────
 deploy_traefik() {
   log_step "Deploying Traefik stack"
@@ -355,19 +543,67 @@ deploy_traefik() {
   log_warn "Traefik container may not be fully started yet"
 }
 
-# ── Main ─────────────────────────────────────────────────────────────────────
-main() {
+post_deploy_acme() {
   module_start "$BOOTSTRAP_MODULE"
   require_root
 
-  setup_directories
-  install_traefik_config
-  install_dynamic_config
-  install_compose_file
-  install_env_file
+  if ! is_true "$LETSENCRYPT_ENABLED"; then
+    log_info "Let's Encrypt is disabled - leaving Traefik on default TLS certificate"
+    write_acme_state_file "false"
+    module_done
+    return 0
+  fi
+
+  local days_remaining
+  days_remaining="$(certificate_days_remaining)"
+
+  if (( days_remaining > LETSENCRYPT_RENEW_BEFORE_DAYS )); then
+    log_info "Existing certificate is valid for ${days_remaining} day(s) - skipping renewal attempt"
+    write_acme_state_file "true"
+    module_done
+    return 0
+  fi
+
+  if is_true "$LETSENCRYPT_REQUIRE_WHOAMI_CHECK"; then
+    verify_whoami_https || log_fatal "Let's Encrypt activation aborted because whoami HTTPS preflight failed"
+  else
+    log_warn "Skipping whoami HTTPS preflight because letsencrypt_require_whoami_check=false"
+  fi
+
+  log_step "Enabling Let's Encrypt certificate management"
+  install_traefik_config "true"
+  install_dynamic_config "true"
+  write_acme_state_file "true"
   deploy_traefik
 
+  days_remaining="$(certificate_days_remaining)"
+  if (( days_remaining >= 0 )); then
+    log_info "Let's Encrypt certificate available (expires in ${days_remaining} day(s))"
+  else
+    log_warn "Traefik was switched to Let's Encrypt mode; certificate issuance may still be in progress"
+  fi
+
   module_done
+}
+
+# ── Main ─────────────────────────────────────────────────────────────────────
+main() {
+  case "$TRAEFIK_MODE" in
+    install)
+      module_start "$BOOTSTRAP_MODULE"
+      require_root
+
+      local acme_active
+      acme_active="$(initial_acme_state)"
+      configure_traefik_stack "$acme_active"
+      deploy_traefik
+
+      module_done
+      ;;
+    post-deploy-acme)
+      post_deploy_acme
+      ;;
+  esac
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
