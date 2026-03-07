@@ -52,7 +52,7 @@ resource "random_password" "gitea_internal_token" {
 resource "random_password" "gitea_admin_password" {
   count   = var.enable_gitea && var.gitea_admin_password == "" ? 1 : 0
   length  = 24
-  special = true
+  special = false
 }
 
 resource "random_password" "n8n_db" {
