@@ -92,10 +92,9 @@ deploy_whoami() {
 
   cd "${WHOAMI_DIR}"
 
-  # Pull image
-  docker compose pull --quiet
-
-  # Deploy
+  # NOTE: Avoid a separate `docker compose pull`, which can hang indefinitely
+  # in non-interactive Terraform remote-exec sessions. `up -d` pulls missing
+  # images automatically.
   docker compose up -d --remove-orphans
 
   # Wait for container

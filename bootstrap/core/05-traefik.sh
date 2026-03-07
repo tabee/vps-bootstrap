@@ -336,10 +336,9 @@ deploy_traefik() {
 
   cd "${TRAEFIK_DIR}"
 
-  # Pull latest image
-  docker compose pull --quiet
-
-  # Deploy (recreate only if config changed)
+  # NOTE: `docker compose pull` can deadlock under non-interactive Terraform
+  # remote-exec sessions with current Compose releases. `up -d` already pulls
+  # missing images, so use that directly to avoid indefinite bootstrap hangs.
   docker compose up -d --remove-orphans
 
   # Wait for container to be healthy

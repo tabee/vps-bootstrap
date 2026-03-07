@@ -295,7 +295,9 @@ deploy_n8n() {
 
   cd "${N8N_DIR}"
 
-  docker compose pull --quiet
+  # NOTE: Avoid a separate `docker compose pull`, which can hang indefinitely
+  # in non-interactive Terraform remote-exec sessions. `up -d` pulls missing
+  # images automatically.
   docker compose up -d --remove-orphans
 
   # Wait for postgres health
