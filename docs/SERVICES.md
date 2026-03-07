@@ -99,7 +99,7 @@ The [tea CLI](https://gitea.com/gitea/tea) runs as a sidecar container alongside
 
 ```bash
 # Via wrapper (after deploy)
-ssh admin@10.100.0.1
+ssh user@10.100.0.1
 tea repos ls
 tea issues ls
 tea pulls ls
