@@ -33,9 +33,13 @@ output "credentials" {
   sensitive   = true
   value = {
     gitea = var.enable_gitea ? {
-      url         = "https://git.${var.domain}"
-      db_password = random_password.gitea_db[0].result
-      secret_key  = random_password.gitea_secret[0].result
+      url            = "https://git.${var.domain}"
+      admin_user     = var.gitea_admin_user
+      admin_password = var.gitea_admin_password != "" ? var.gitea_admin_password : random_password.gitea_admin_password[0].result
+      db_password    = random_password.gitea_db[0].result
+      secret_key     = random_password.gitea_secret[0].result
+      internal_token = random_password.gitea_internal_token[0].result
+      tea_cli        = "ssh ${var.admin_user}@${local.vpn_server_ip} 'tea <command>'"
     } : null
 
     n8n = var.enable_n8n ? {

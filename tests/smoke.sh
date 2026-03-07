@@ -144,6 +144,7 @@ assert "variables.tf: has ssh_host" grep -q 'ssh_host' "${ROOT_DIR}/variables.tf
 assert "variables.tf: has domain" grep -q 'domain' "${ROOT_DIR}/variables.tf"
 assert "variables.tf: has vpn_clients" grep -q 'vpn_clients' "${ROOT_DIR}/variables.tf"
 assert "variables.tf: has enable_gitea" grep -q 'enable_gitea' "${ROOT_DIR}/variables.tf"
+assert "variables.tf: has gitea_tea_token" grep -q 'gitea_tea_token' "${ROOT_DIR}/variables.tf"
 assert "variables.tf: has enable_gogcli" grep -q 'enable_gogcli' "${ROOT_DIR}/variables.tf"
 assert "main.tf: uses null_resource" grep -q 'null_resource' "${ROOT_DIR}/main.tf"
 assert "main.tf: syncs vpn_clients" grep -q 'vpn-client.sh sync' "${ROOT_DIR}/main.tf"

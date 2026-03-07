@@ -43,6 +43,18 @@ resource "random_password" "gitea_secret" {
   special = false
 }
 
+resource "random_password" "gitea_internal_token" {
+  count   = var.enable_gitea ? 1 : 0
+  length  = 64
+  special = false
+}
+
+resource "random_password" "gitea_admin_password" {
+  count   = var.enable_gitea && var.gitea_admin_password == "" ? 1 : 0
+  length  = 24
+  special = true
+}
+
 resource "random_password" "n8n_db" {
   count   = var.enable_n8n ? 1 : 0
   length  = 32
@@ -90,6 +102,10 @@ ENABLE_GOGCLI="${var.enable_gogcli}"
 %{if var.enable_gitea~}
 GITEA_DB_PASSWORD="${random_password.gitea_db[0].result}"
 GITEA_SECRET_KEY="${random_password.gitea_secret[0].result}"
+GITEA_INTERNAL_TOKEN="${random_password.gitea_internal_token[0].result}"
+GITEA_ADMIN_USER="${var.gitea_admin_user}"
+GITEA_ADMIN_EMAIL="${var.gitea_admin_email}"
+GITEA_ADMIN_PASSWORD="${var.gitea_admin_password != "" ? var.gitea_admin_password : random_password.gitea_admin_password[0].result}"
 %{endif~}
 %{if var.enable_n8n~}
 N8N_DB_PASSWORD="${random_password.n8n_db[0].result}"

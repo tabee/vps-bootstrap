@@ -40,7 +40,7 @@ Containers must **never** publish ports to the host.
 | Type | Services | How | Example |
 |------|----------|-----|---------|
 | **Web (Traefik)** | Gitea, n8n, whoami | HTTPS via reverse proxy | `https://gitea.domain.com` |
-| **CLI (SSH)** | gogcli, admin tools | `docker exec` via SSH | `ssh admin@10.100.0.1 'gog gmail list'` |
+| **CLI (SSH)** | gogcli, tea, admin tools | `docker exec` via SSH | `ssh admin@10.100.0.1 'tea repos ls'` |
 
 **Web services:** Use Traefik labels, accessed from anywhere via HTTPS.
 **CLI services:** No web interface, accessed only via VPN+SSH.

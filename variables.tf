@@ -115,6 +115,25 @@ variable "enable_gitea" {
   default     = false
 }
 
+variable "gitea_admin_user" {
+  description = "Gitea admin username (created automatically on first deploy)"
+  type        = string
+  default     = "gitea-admin"
+}
+
+variable "gitea_admin_email" {
+  description = "Gitea admin email address"
+  type        = string
+  default     = "admin@example.com"
+}
+
+variable "gitea_admin_password" {
+  description = "Gitea admin password (auto-generated if empty)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 variable "enable_n8n" {
   description = "Install workflow automation? (n8n.domain.com)"
   type        = bool

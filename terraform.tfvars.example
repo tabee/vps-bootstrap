@@ -42,6 +42,9 @@ letsencrypt_renew_before_days    = 30
 
 # Git server (git.example.com)
 enable_gitea = false
+# gitea_admin_user     = "gitea-admin"       # Admin username
+# gitea_admin_email    = "admin@example.com"  # Admin email
+# gitea_admin_password = ""                   # Auto-generated if empty
 
 # Workflow automation (n8n.example.com)
 enable_n8n = false

@@ -34,16 +34,16 @@
     ▼      ▼      ▼                 ▼
   Gitea   n8n  whoami           SSH → docker exec
   :3000  :5678  :80                 │
-   (Docker containers)         ┌────┴────┐
-                               │ gogcli  │
-                               │ (Docker)│
-                               └─────────┘
+   (Docker containers)         ┌────┴────┬─────────┐
+                               │ gogcli  │ tea CLI │
+                               │ (Docker)│ (Gitea) │
+                               └─────────┴─────────┘
 ```
 
 | Access | Services | Method |
 |--------|----------|--------|
 | 🌐 **Web (Traefik)** | Gitea, n8n, whoami | Browser → `https://service.domain` |
-| 🔒 **SSH (VPN only)** | gogcli | VPN → `ssh admin@10.100.0.1` → `gog <cmd>` |
+| 🔒 **SSH (VPN only)** | gogcli, tea | VPN → `ssh admin@10.100.0.1` → `gog/tea <cmd>` |
 
 ---
 
@@ -51,8 +51,7 @@
 
 | Service | Container | Access | Enable Variable |
 |---------|-----------|--------|-----------------|
-| Gitea | `gitea` | Traefik → `https://gitea.DOMAIN` | `enable_gitea = true` |
-| n8n | `n8n` | Traefik → `https://n8n.DOMAIN` | `enable_n8n = true` |
+| Gitea | `gitea` | Traefik → `https://gitea.DOMAIN` | `enable_gitea = true` || tea CLI | `gitea-tea` | SSH → `tea <command>` | (included with Gitea) || n8n | `n8n` | Traefik → `https://n8n.DOMAIN` | `enable_n8n = true` |
 | whoami | `whoami` | Traefik → `https://whoami.DOMAIN` | `enable_whoami = true` |
 | gogcli | `gogcli` | SSH → `gog <command>` | `enable_gogcli = true` |
 
@@ -82,6 +81,54 @@ Uses port 2222 to avoid conflict with system SSH:
 ```bash
 git clone ssh://git@YOUR_DOMAIN:2222/user/repo.git
 ```
+
+### tea CLI (Gitea CLI Sidecar)
+
+The [tea CLI](https://gitea.com/gitea/tea) runs as a sidecar container alongside Gitea. It is automatically deployed when Gitea is enabled.
+
+> ⚠️ **Access:** VPN + SSH only (no web interface, no exposed ports).
+
+```
+┌──────────┐     VPN      ┌────────────┐     SSH      ┌─────────────┐
+│  Client  │ ──────────── │  10.100.0.1│ ──────────── │   Docker    │
+│ (lokal)  │   WireGuard  │   Server   │  admin user  │  gitea-tea  │
+└──────────┘              └────────────┘              └─────────────┘
+```
+
+**Usage:**
+
+```bash
+# Via wrapper (after deploy)
+ssh admin@10.100.0.1
+tea repos ls
+tea issues ls
+tea pulls ls
+
+# Direct docker exec
+docker exec -it gitea-tea tea repos ls
+```
+
+**Token configuration:**
+
+Option 1 — via Terraform (auto-configured on deploy):
+```hcl
+enable_gitea    = true
+gitea_tea_token = "your-personal-access-token"
+```
+
+Option 2 — manually after deploy:
+```bash
+ssh admin@10.100.0.1
+tea login add --name gitea --url https://git.YOUR_DOMAIN --token <your-token>
+```
+
+| Property | Value |
+|----------|-------|
+| Container | `gitea-tea` |
+| Image | `gitea/tea:latest` |
+| Network | `vpn_net` (10.20.0.32) |
+| Config | `/opt/gitea/tea-config/` |
+| Ports | **keine** (nur docker exec) |
 
 ---
 
