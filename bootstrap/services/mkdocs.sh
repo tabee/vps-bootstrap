@@ -580,12 +580,18 @@ create_gitea_repo() {
   log_info "Waiting for Gitea API..."
   local i=0
   while [[ $i -lt 120 ]]; do
-    if docker exec gitea curl -sf http://localhost:3000/api/v1/settings/api >/dev/null 2>&1; then
+    if docker exec gitea curl -sf http://localhost:3000/api/v1/version >/dev/null 2>&1; then
+      log_info "Gitea API is reachable"
       break
     fi
     sleep 3
     i=$((i + 3))
   done
+
+  if [[ $i -ge 120 ]]; then
+    log_warn "Gitea API did not become ready in time — skipping repo creation"
+    return 0
+  fi
 
   # Check if repo already exists
   if docker exec gitea curl -sf \
@@ -644,7 +650,7 @@ push_initial_docs() {
   local tmpdir
   tmpdir="$(mktemp -d)"
 
-  (
+  if ! (
     cd "$tmpdir"
     git clone "http://${GITEA_ADMIN_USER}:${GITEA_ADMIN_PASSWORD}@10.20.0.30:3000/${GITEA_ADMIN_USER}/${MKDOCS_REPO_NAME}.git" repo
     cd repo
@@ -867,7 +873,11 @@ MDEOF
     git add -A
     git commit -m "Initial mkdocs-material documentation structure"
     git push origin "${MKDOCS_REPO_BRANCH}"
-  )
+  ); then
+    rm -rf "$tmpdir"
+    log_warn "Initial docs push failed (repo/auth not ready) — continuing"
+    return 0
+  fi
 
   rm -rf "$tmpdir"
   log_info "✅ Initial docs structure pushed to Gitea"
