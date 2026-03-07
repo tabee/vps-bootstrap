@@ -203,9 +203,11 @@ setup_directories() {
   fi
 
   mkdir -p "${TRAEFIK_DIR}/letsencrypt"
+  touch "${ACME_STORAGE_FILE}"
   # letsencrypt directory must be writable by traefik user (65532)
   chown -R 65532:65532 "${TRAEFIK_DIR}/letsencrypt"
   chmod 0700 "${TRAEFIK_DIR}/letsencrypt"
+  chmod 0600 "${ACME_STORAGE_FILE}"
   log_info "Created $TRAEFIK_DIR"
 }
 
