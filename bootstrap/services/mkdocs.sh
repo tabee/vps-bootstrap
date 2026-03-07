@@ -380,7 +380,12 @@ services:
       - SETGID
       - DAC_OVERRIDE
     volumes:
-      - site_data:/usr/share/nginx/html:ro
+      - type: volume
+        source: site_data
+        target: /usr/share/nginx/html
+        read_only: true
+        volume:
+          nocopy: true
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8080/healthz"]
@@ -562,6 +567,23 @@ deploy_mkdocs() {
   log_warn "mkdocs containers may not be fully started yet"
 }
 
+# ── Ensure builder can write site volume ───────────────────────────────────
+normalize_site_volume_permissions() {
+  log_step "Ensuring mkdocs site volume permissions"
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    log_info "Would normalize ownership on mkdocs_site_data"
+    return 0
+  fi
+
+  # Builder runs as uid/gid 1000 (mkdocs user)
+  docker run --rm --user 0:0 \
+    -v mkdocs_site_data:/workspace/site \
+    mkdocs-builder:local \
+    sh -lc 'chown -R 1000:1000 /workspace/site && chmod -R u+rwX /workspace/site' >/dev/null 2>&1 || \
+    log_warn "Could not normalize site_data permissions (builder may fail to write)"
+}
+
 # ── Create docs repo in Gitea ───────────────────────────────────────────────
 create_gitea_repo() {
   log_step "Ensuring Gitea 'docs' repository exists"
@@ -580,7 +602,7 @@ create_gitea_repo() {
   log_info "Waiting for Gitea API..."
   local i=0
   while [[ $i -lt 30 ]]; do
-    if docker exec gitea curl -sf http://localhost:3000/api/v1/version >/dev/null 2>&1; then
+    if docker exec gitea curl -sS http://localhost:3000/ >/dev/null 2>&1; then
       log_info "Gitea API is reachable"
       break
     fi
@@ -1010,9 +1032,13 @@ main() {
   install_compose_file
   install_env_file
   patch_traefik_routes
-  deploy_mkdocs
+
+  # Repo bootstrap first so builder's initial startup build can succeed
   create_gitea_repo
   push_initial_docs
+
+  deploy_mkdocs
+  normalize_site_volume_permissions
   register_webhook
   trigger_first_build
 

@@ -381,7 +381,7 @@ create_admin_user() {
   log_info "Waiting for Gitea to be ready..."
   local i=0
   while [[ $i -lt 30 ]]; do
-    if docker exec gitea curl -sf http://localhost:3000/api/v1/version >/dev/null 2>&1; then
+    if docker exec gitea curl -sS http://localhost:3000/ >/dev/null 2>&1; then
       break
     fi
     sleep 2
@@ -399,6 +399,17 @@ create_admin_user() {
 
   if echo "$admin_list" | grep -q "${GITEA_ADMIN_USER}"; then
     log_info "Admin user '${GITEA_ADMIN_USER}' already exists"
+
+    # Keep password in sync with Terraform-managed secret
+    docker exec -u git gitea gitea admin user change-password \
+      --username "${GITEA_ADMIN_USER}" \
+      --password "${GITEA_ADMIN_PASSWORD}" >/dev/null 2>&1 || \
+      log_warn "Could not sync admin password for '${GITEA_ADMIN_USER}'"
+
+    # Ensure API automation can authenticate without forced password change flow
+    docker exec -u git gitea gitea admin user must-change-password \
+      --unset "${GITEA_ADMIN_USER}" >/dev/null 2>&1 || true
+
     return 0
   fi
 
@@ -413,6 +424,9 @@ create_admin_user() {
       log_warn "Admin user creation failed (may already exist)"
       return 0
     }
+
+  docker exec -u git gitea gitea admin user must-change-password \
+    --unset "${GITEA_ADMIN_USER}" >/dev/null 2>&1 || true
 
   log_info "✅ Gitea admin user '${GITEA_ADMIN_USER}' created"
 }
