@@ -286,32 +286,39 @@ sync_app_ini_db_password() {
     return 0
   fi
 
-  APP_INI="$app_ini" GITEA_DB_PASSWORD="$GITEA_DB_PASSWORD" python3 - <<'PY'
-from pathlib import Path
-import configparser
-import os
+  local tmp_file
+  tmp_file="$(mktemp)"
 
-path = Path(os.environ["APP_INI"])
-target = os.environ["GITEA_DB_PASSWORD"]
+  if awk -v pw="$GITEA_DB_PASSWORD" '
+    BEGIN { in_db=0; replaced=0 }
+    /^\[/ {
+      in_db = ($0 == "[database]")
+    }
+    {
+      if (in_db && $0 ~ /^PASSWD[[:space:]]*=/) {
+        print "PASSWD = " pw
+        replaced=1
+        next
+      }
+      print
+    }
+    END {
+      if (replaced == 0) exit 2
+    }
+  ' "$app_ini" > "$tmp_file"; then
+    if cmp -s "$app_ini" "$tmp_file"; then
+      log_info "app.ini database password already in sync"
+      rm -f "$tmp_file"
+      return 0
+    fi
 
-cfg = configparser.ConfigParser()
-cfg.optionxform = str
-cfg.read(path)
-
-if not cfg.has_section("database"):
-    raise SystemExit(0)
-
-current = cfg.get("database", "PASSWD", fallback="")
-if current == target:
-    raise SystemExit(0)
-
-cfg.set("database", "PASSWD", target)
-with path.open("w", encoding="utf-8") as f:
-    cfg.write(f)
-print("updated")
-PY
-
-  log_info "app.ini database password checked/synced"
+    cp "$tmp_file" "$app_ini"
+    rm -f "$tmp_file"
+    log_info "Updated database PASSWD in app.ini"
+  else
+    rm -f "$tmp_file"
+    log_warn "Could not patch app.ini database PASSWD automatically; continuing"
+  fi
 }
 
 # ── Deploy Gitea stack ──────────────────────────────────────────────────────
