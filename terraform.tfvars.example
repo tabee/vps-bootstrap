@@ -56,6 +56,11 @@ enable_whoami = true
 # Requires Google OAuth setup - see docs/SERVICES.md
 enable_gogcli = false
 
+# MkDocs documentation site (docs.<domain>)
+# Requires enable_gitea = true (docs live in Gitea repo)
+enable_mkdocs = false
+# mkdocs_webhook_secret = ""  # Auto-generated if empty
+
 # Google OAuth credentials (optional - can be added later manually)
 # Get from: https://console.cloud.google.com/apis/credentials
 # Create OAuth 2.0 Client ID → Desktop app

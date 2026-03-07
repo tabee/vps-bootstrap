@@ -54,6 +54,7 @@
 | Gitea | `gitea` | Traefik → `https://gitea.DOMAIN` | `enable_gitea = true` || tea CLI | `gitea-tea` | SSH → `tea <command>` | (included with Gitea) || n8n | `n8n` | Traefik → `https://n8n.DOMAIN` | `enable_n8n = true` |
 | whoami | `whoami` | Traefik → `https://whoami.DOMAIN` | `enable_whoami = true` |
 | gogcli | `gogcli` | SSH → `gog <command>` | `enable_gogcli = true` |
+| MkDocs | `mkdocs-nginx` + `mkdocs-webhook` | Traefik → `https://docs.DOMAIN` | `enable_mkdocs = true` |
 
 ---
 
@@ -303,49 +304,94 @@ sudo docker restart gogcli
 
 ---
 
+## MkDocs (Documentation Site)
+
+Self-hosted documentation using [MkDocs Material](https://squidfunk.github.io/mkdocs-material/), served via Nginx.
+
+### Architecture
+
+Two-container sidecar pattern:
+
+```
+                         ┌─────────────────┐
+  Traefik (10.20.0.10)   │  mkdocs-nginx   │
+  docs.<domain>:443  ──► │  10.20.0.60     │  serves /usr/share/nginx/html (read-only)
+                         └────────┬────────┘
+                                  │  shared volume: site_data
+                         ┌────────┴────────┐
+  Gitea push webhook ──► │ mkdocs-webhook  │  git pull + mkdocs build
+  10.20.0.62:9000        │  10.20.0.62     │  writes to site_data
+                         └─────────────────┘
+```
+
+- **Nginx** (Alpine) at 10.20.0.60 — serves pre-built HTML
+- **Webhook/Builder** at 10.20.0.62 — receives Gitea push events, validates HMAC-SHA256, runs `mkdocs build`
+- Builds are atomic (temp dir → rename swap)
+- Initial docs structure is auto-created in Gitea on first deploy
+
+### Configuration
+
+```hcl
+enable_mkdocs = true
+# mkdocs_webhook_secret = ""   # Auto-generated if empty
+```
+
+### Prerequisites
+
+- **Gitea must be enabled** (`enable_gitea = true`) — MkDocs creates its repo in Gitea
+- Service runs AFTER Gitea in the bootstrap sequence
+
+### Access
+
+- **URL:** `https://docs.YOUR_DOMAIN`
+- **Repo:** `https://git.YOUR_DOMAIN/ADMIN_USER/docs`
+- **Edit:** Push changes to the `docs` repo in Gitea → auto-rebuilt via webhook
+
+### Workflow
+
+1. Bootstrap creates a `docs` repo in Gitea with initial mkdocs-material structure
+2. Registers a Gitea webhook pointing to the builder container
+3. On every `git push` to the `main` branch:
+   - Builder receives webhook, validates HMAC signature
+   - Runs `git pull` + `mkdocs build --strict`
+   - Atomically swaps the built site into the shared volume
+   - Nginx immediately serves the new version
+
+### Container Details
+
+| Property | mkdocs-nginx | mkdocs-webhook |
+|----------|:---:|:---:|
+| Image | `nginx:alpine` | `mkdocs-builder:local` (built locally) |
+| IP | 10.20.0.60 | 10.20.0.62 |
+| Internal Port | 8080 | 9000 |
+| Config | `/opt/mkdocs/nginx.conf` | `/opt/mkdocs/webhook.py` |
+| Exposed Ports | **none** | **none** |
+
+Data directories:
+- Config: `/opt/mkdocs/`
+- Site data: Docker volume `site_data`
+- Git repo: Docker volume `repo_data`
+
+---
+
 ## Adding Services
 
-Custom services should follow this pattern:
+Custom services should follow the patterns documented in `docs/ARCHITECTURE.md`.
 
-1. Create `bootstrap/services/your-service.sh`
-2. Add variables to `variables.tf` and `terraform.tfvars.example`
-3. Add conditional call in `main.tf`
+**Key steps:**
 
-### Template
+1. `variables.tf` — add `enable_<name>` + secret variables
+2. `main.tf` — add `random_password` + add to `env_content`
+3. `bootstrap/apply.sh` — add `ENABLE_<NAME>` flag + `run_service_module` call
+4. `bootstrap/services/<name>.sh` — service script (see template in ARCHITECTURE.md)
+5. `terraform.tfvars.example` — add example config
+6. `outputs.tf` — add to `credentials` and `services` outputs
+7. `tests/smoke.sh` — add file existence + syntax tests
+8. `docs/SERVICES.md` — add documentation section
 
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-
-SERVICE_NAME="myservice"
-SERVICE_VERSION="${1:-latest}"
-DOMAIN="${2}"
-
-# Create directories
-mkdir -p /opt/"$SERVICE_NAME"
-
-# Create docker-compose.yml
-cat > /opt/"$SERVICE_NAME"/docker-compose.yml << EOF
-services:
-  $SERVICE_NAME:
-    image: myimage:$SERVICE_VERSION
-    container_name: $SERVICE_NAME
-    restart: unless-stopped
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.$SERVICE_NAME.rule=Host(\`$SERVICE_NAME.$DOMAIN\`)"
-      - "traefik.http.routers.$SERVICE_NAME.entrypoints=websecure"
-      - "traefik.http.routers.$SERVICE_NAME.tls.certresolver=letsencrypt"
-    networks:
-      - traefik
-
-networks:
-  traefik:
-    external: true
-EOF
-
-cd /opt/"$SERVICE_NAME" && docker compose up -d
-```
+> **Important:** Use `file_matches` + `install_content` for idempotent file writes.
+> Traefik uses **file provider** — patch `dynamic.yml` via embedded Python3, NOT Docker labels.
+> See `docs/ARCHITECTURE.md` for the complete template and examples.
 
 ---
 

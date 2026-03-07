@@ -152,6 +152,19 @@ variable "enable_gogcli" {
   default     = false
 }
 
+variable "enable_mkdocs" {
+  description = "Install MkDocs documentation? (docs.<domain>, requires enable_gitea)"
+  type        = bool
+  default     = false
+}
+
+variable "mkdocs_webhook_secret" {
+  description = "Webhook secret for Gitea → MkDocs rebuild (auto-generated if empty)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 # ═══════════════════════════════════════════════════════════════════════════
 # GOGCLI - Google OAuth Credentials (optional, can be set later manually)
 # ═══════════════════════════════════════════════════════════════════════════

@@ -53,6 +53,12 @@ output "credentials" {
       config   = "/opt/gogcli"
       note     = "Requires Google OAuth setup - see README"
     } : null
+
+    mkdocs = var.enable_mkdocs ? {
+      url             = "https://docs.${var.domain}"
+      repo            = "https://git.${var.domain}/${var.gitea_admin_user}/docs"
+      webhook_secret  = var.mkdocs_webhook_secret != "" ? var.mkdocs_webhook_secret : random_password.mkdocs_webhook_secret[0].result
+    } : null
   }
 }
 
@@ -67,6 +73,7 @@ output "services" {
     n8n    = var.enable_n8n ? "https://n8n.${var.domain}" : null
     whoami = var.enable_whoami ? "https://whoami.${var.domain}" : null
     gogcli = var.enable_gogcli ? "ssh ${var.admin_user}@${local.vpn_server_ip} 'gog <command>'" : null
+    mkdocs = var.enable_mkdocs ? "https://docs.${var.domain}" : null
   }
 }
 

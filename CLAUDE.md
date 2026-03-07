@@ -5,7 +5,7 @@
 
 ## Project Overview
 
-VPS bootstrap system: Terraform + Bash scripts that deploy a hardened Debian 12 VPS with WireGuard VPN, Docker, Traefik, and optional services (Gitea, n8n, gogcli, whoami).
+VPS bootstrap system: Terraform + Bash scripts that deploy a hardened Debian 12 VPS with WireGuard VPN, Docker, Traefik, and optional services (Gitea, n8n, gogcli, whoami, mkdocs).
 
 ## Critical Rules
 
@@ -44,4 +44,4 @@ Touch these files in order:
 
 ## Next Available IPs
 
-10.20.0.60+ (used: .10 Traefik, .20 whoami, .30-.32 Gitea, .40-.41 n8n, .50 gogcli)
+10.20.0.70+ (used: .10 Traefik, .20 whoami, .30-.32 Gitea, .40-.41 n8n, .50 gogcli, .60+.62 MkDocs)

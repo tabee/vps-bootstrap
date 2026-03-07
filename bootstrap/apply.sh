@@ -99,6 +99,7 @@ ENABLE_GITEA="${ENABLE_GITEA:-false}"
 ENABLE_N8N="${ENABLE_N8N:-false}"
 ENABLE_WHOAMI="${ENABLE_WHOAMI:-true}"
 ENABLE_GOGCLI="${ENABLE_GOGCLI:-false}"
+ENABLE_MKDOCS="${ENABLE_MKDOCS:-false}"
 ADMIN_USER="${ADMIN_USER:-admin}"
 
 # ── Lock-file to prevent concurrent execution ───────────────────────────────
@@ -195,6 +196,7 @@ main() {
   [[ "$ENABLE_GITEA" == "true" ]] && run_service_module "gitea"
   [[ "$ENABLE_N8N" == "true" ]] && run_service_module "n8n"
   [[ "$ENABLE_GOGCLI" == "true" ]] && run_service_module "gogcli"
+  [[ "$ENABLE_MKDOCS" == "true" ]] && run_service_module "mkdocs"
   
   # ─────────────────────────────────────────────────────────────────────────
   # PHASE 3: Lockdown (handled by Terraform after VPN clients are created)

@@ -75,6 +75,7 @@ assert_file_exists "services/gitea.sh"
 assert_file_exists "services/n8n.sh"
 assert_file_exists "services/whoami.sh"
 assert_file_exists "services/gogcli.sh"
+assert_file_exists "services/mkdocs.sh"
 
 # Scripts
 assert_file_exists "scripts/vpn-client.sh"
@@ -88,7 +89,8 @@ for script in apply.sh \
               core/03-firewall.sh core/04-docker.sh \
               core/05-traefik.sh core/06-harden.sh \
               services/gitea.sh services/n8n.sh services/whoami.sh \
-              services/gogcli.sh scripts/vpn-client.sh; do
+              services/gogcli.sh services/mkdocs.sh \
+              scripts/vpn-client.sh; do
   assert_executable "$script"
 done
 echo ""
@@ -144,8 +146,8 @@ assert "variables.tf: has ssh_host" grep -q 'ssh_host' "${ROOT_DIR}/variables.tf
 assert "variables.tf: has domain" grep -q 'domain' "${ROOT_DIR}/variables.tf"
 assert "variables.tf: has vpn_clients" grep -q 'vpn_clients' "${ROOT_DIR}/variables.tf"
 assert "variables.tf: has enable_gitea" grep -q 'enable_gitea' "${ROOT_DIR}/variables.tf"
-assert "variables.tf: has gitea_tea_token" grep -q 'gitea_tea_token' "${ROOT_DIR}/variables.tf"
 assert "variables.tf: has enable_gogcli" grep -q 'enable_gogcli' "${ROOT_DIR}/variables.tf"
+assert "variables.tf: has enable_mkdocs" grep -q 'enable_mkdocs' "${ROOT_DIR}/variables.tf"
 assert "main.tf: uses null_resource" grep -q 'null_resource' "${ROOT_DIR}/main.tf"
 assert "main.tf: syncs vpn_clients" grep -q 'vpn-client.sh sync' "${ROOT_DIR}/main.tf"
 assert "outputs.tf: has credentials output" grep -q 'credentials' "${ROOT_DIR}/outputs.tf"

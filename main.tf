@@ -67,6 +67,12 @@ resource "random_password" "n8n_encryption" {
   special = false
 }
 
+resource "random_password" "mkdocs_webhook_secret" {
+  count   = var.enable_mkdocs && var.mkdocs_webhook_secret == "" ? 1 : 0
+  length  = 32
+  special = false
+}
+
 # =============================================================================
 # Bootstrap Environment File
 # =============================================================================
@@ -97,6 +103,7 @@ ENABLE_GITEA="${var.enable_gitea}"
 ENABLE_N8N="${var.enable_n8n}"
 ENABLE_WHOAMI="${var.enable_whoami}"
 ENABLE_GOGCLI="${var.enable_gogcli}"
+ENABLE_MKDOCS="${var.enable_mkdocs}"
 
 # ── Service Secrets ──────────────────────────────────────────────────────────
 %{if var.enable_gitea~}
@@ -115,6 +122,9 @@ N8N_ENCRYPTION_KEY="${random_password.n8n_encryption[0].result}"
 GOOGLE_CLIENT_ID="${var.google_client_id}"
 GOOGLE_CLIENT_SECRET="${var.google_client_secret}"
 GOOGLE_PROJECT_ID="${var.google_project_id}"
+%{endif~}
+%{if var.enable_mkdocs~}
+MKDOCS_WEBHOOK_SECRET="${var.mkdocs_webhook_secret != "" ? var.mkdocs_webhook_secret : random_password.mkdocs_webhook_secret[0].result}"
 %{endif~}
 
 # ── VPN Clients ──────────────────────────────────────────────────────────────
