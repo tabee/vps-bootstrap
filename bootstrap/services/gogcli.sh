@@ -118,19 +118,19 @@ install_dockerfile() {
 # See: https://github.com/steipete/gogcli
 # =============================================================================
 
-FROM golang:1.22-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 RUN apk add --no-cache git
 
 WORKDIR /build
-RUN go install github.com/steipete/gogcli@latest
+RUN go install github.com/steipete/gogcli/cmd/gog@latest
 
 # Runtime image
 FROM alpine:3.19
 
 RUN apk add --no-cache ca-certificates tzdata
 
-COPY --from=builder /go/bin/gogcli /usr/local/bin/gog
+COPY --from=builder /go/bin/gog /usr/local/bin/gog
 
 RUN mkdir -p /root/.config/gogcli /root/.cache/gogcli
 
@@ -226,7 +226,8 @@ start_container() {
   cd "$GOGCLI_DIR"
   
   log_info "Building gogcli image (this may take a minute)..."
-  docker compose build --quiet
+  # Use host network for build so containers can access internet
+  docker build --network=host -t gogcli:local --quiet .
   docker compose up -d
 
   # Wait for container to be ready
