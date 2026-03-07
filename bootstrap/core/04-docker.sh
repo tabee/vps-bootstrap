@@ -34,6 +34,14 @@ source "${SCRIPT_DIR}/lib/backup.sh"
 
 BOOTSTRAP_MODULE="docker"
 
+# Load environment
+if [[ -f "${SCRIPT_DIR}/.env" ]]; then
+  # shellcheck source=/dev/null
+  source "${SCRIPT_DIR}/.env"
+fi
+
+ADMIN_USER="${ADMIN_USER:-admin}"
+
 # ── Install Docker CE ────────────────────────────────────────────────────────
 install_docker() {
   log_step "Installing Docker CE"
@@ -80,6 +88,31 @@ EOF
     docker-compose-plugin docker-buildx-plugin
 
   log_info "Docker CE installed successfully"
+}
+
+# ── Add admin user to docker group ──────────────────────────────────────────
+add_admin_to_docker_group() {
+  log_step "Adding admin user to docker group"
+
+  local admin_user="${ADMIN_USER:-admin}"
+
+  if ! id "$admin_user" &>/dev/null; then
+    log_warn "Admin user '$admin_user' does not exist yet, skipping docker group"
+    return 0
+  fi
+
+  if id -nG "$admin_user" | grep -qw docker; then
+    log_info "User '$admin_user' already in docker group"
+    return 0
+  fi
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    log_info "Would add '$admin_user' to docker group"
+    return 0
+  fi
+
+  usermod -aG docker "$admin_user"
+  log_info "Added '$admin_user' to docker group (re-login required to apply)"
 }
 
 # ── Configure Docker daemon ─────────────────────────────────────────────────
@@ -232,6 +265,7 @@ main() {
   require_root
 
   install_docker
+  add_admin_to_docker_group
   configure_docker_daemon
   enable_docker
   create_vpn_network

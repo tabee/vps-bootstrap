@@ -235,6 +235,12 @@ start_container() {
 
   if docker ps | grep -q gogcli; then
     log_info "✅ gogcli container running"
+    
+    # Register credentials if they exist
+    if [[ -n "$GOOGLE_CLIENT_ID" ]] && [[ -n "$GOOGLE_CLIENT_SECRET" ]]; then
+      log_info "Registering OAuth credentials with gogcli..."
+      docker exec gogcli gog auth credentials set /root/.config/gogcli/credentials.json || true
+    fi
   else
     log_warn "gogcli container may not have started correctly"
     docker compose logs
