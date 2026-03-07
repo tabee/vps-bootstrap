@@ -201,6 +201,28 @@ install_env_file() {
 
   local env_file="${GITEA_DIR}/.env"
 
+  if [[ -f "$env_file" ]]; then
+    local existing_db_password
+    local existing_secret_key
+    local existing_internal_token
+    existing_db_password=$(grep '^POSTGRES_PASSWORD=' "$env_file" 2>/dev/null | cut -d'=' -f2- || true)
+    existing_secret_key=$(grep '^GITEA_SECRET_KEY=' "$env_file" 2>/dev/null | cut -d'=' -f2- || true)
+    existing_internal_token=$(grep '^GITEA_INTERNAL_TOKEN=' "$env_file" 2>/dev/null | cut -d'=' -f2- || true)
+
+    if [[ -n "$existing_db_password" ]]; then
+      GITEA_DB_PASSWORD="$existing_db_password"
+      log_info "Preserving existing POSTGRES_PASSWORD for DB compatibility"
+    fi
+    if [[ -n "$existing_secret_key" ]]; then
+      GITEA_SECRET_KEY="$existing_secret_key"
+      log_info "Preserving existing GITEA_SECRET_KEY"
+    fi
+    if [[ -n "$existing_internal_token" ]]; then
+      GITEA_INTERNAL_TOKEN="$existing_internal_token"
+      log_info "Preserving existing GITEA_INTERNAL_TOKEN"
+    fi
+  fi
+
   if [[ -z "$GITEA_DB_PASSWORD" ]]; then
     log_warn "GITEA_DB_PASSWORD not set — generating random password"
     GITEA_DB_PASSWORD=$(openssl rand -hex 16)
@@ -311,7 +333,15 @@ create_admin_user() {
   done
 
   # Check if admin user already exists
-  if docker exec -u git gitea gitea admin user list --admin 2>/dev/null | grep -q "${GITEA_ADMIN_USER}"; then
+  local admin_list
+  admin_list=$(docker exec -u git gitea gitea admin user list --admin 2>/dev/null || true)
+
+  if [[ -z "$admin_list" ]]; then
+    log_warn "Gitea admin CLI is not ready (DB/auth) — skipping admin user creation for now"
+    return 0
+  fi
+
+  if echo "$admin_list" | grep -q "${GITEA_ADMIN_USER}"; then
     log_info "Admin user '${GITEA_ADMIN_USER}' already exists"
     return 0
   fi
