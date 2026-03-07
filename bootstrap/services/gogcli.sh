@@ -300,7 +300,7 @@ main() {
   start_container
   print_setup_instructions
 
-  module_end "$BOOTSTRAP_MODULE"
+  module_done "$BOOTSTRAP_MODULE"
 }
 
 main "$@"
