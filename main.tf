@@ -149,7 +149,8 @@ resource "null_resource" "deploy_env" {
   depends_on = [null_resource.clone_repo]
 
   triggers = {
-    env_hash = sha256(local.env_content)
+    env_hash   = sha256(local.env_content)
+    clone_id   = null_resource.clone_repo.id  # Re-deploy when repo is re-cloned
   }
 
   connection {
