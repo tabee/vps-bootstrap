@@ -195,10 +195,12 @@ gog calendar events --json
 | Property | Value |
 |----------|-------|
 | Container | `gogcli` |
-| Image | `steipete/gogcli:latest` |
+| Image | `gogcli:local` (lokal gebaut) |
 | Network | `vpn_net` (10.20.0.50) |
 | Config | `/opt/gogcli/config/` |
 | Ports | **keine** (nur docker exec) |
+
+> **Hinweis:** Das Image wird beim Deployment lokal gebaut, da kein offizielles Docker-Image existiert.
 
 ### Manuelle Credential-Setup (ohne Terraform)
 

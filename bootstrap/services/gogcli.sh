@@ -98,6 +98,48 @@ EOF
   log_info "Written credentials.json from Terraform config"
 }
 
+# ── Generate Dockerfile ──────────────────────────────────────────────────────
+install_dockerfile() {
+  log_step "Installing gogcli Dockerfile"
+
+  local dockerfile="${GOGCLI_DIR}/Dockerfile"
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    log_info "Would create $dockerfile"
+    return 0
+  fi
+
+  # Write Dockerfile inline (gogcli has no official Docker image)
+  cat > "$dockerfile" <<'DOCKERFILE'
+# =============================================================================
+# Dockerfile — gogcli (Google Workspace CLI)
+# =============================================================================
+# Multi-stage build to create a minimal container with gogcli binary
+# See: https://github.com/steipete/gogcli
+# =============================================================================
+
+FROM golang:1.22-alpine AS builder
+
+RUN apk add --no-cache git
+
+WORKDIR /build
+RUN go install github.com/steipete/gogcli@latest
+
+# Runtime image
+FROM alpine:3.19
+
+RUN apk add --no-cache ca-certificates tzdata
+
+COPY --from=builder /go/bin/gogcli /usr/local/bin/gog
+
+RUN mkdir -p /root/.config/gogcli /root/.cache/gogcli
+
+CMD ["tail", "-f", "/dev/null"]
+DOCKERFILE
+
+  log_info "Created $dockerfile"
+}
+
 # ── Generate docker-compose.yml ──────────────────────────────────────────────
 install_compose_file() {
   log_step "Installing gogcli docker-compose.yml"
@@ -114,6 +156,7 @@ install_compose_file() {
   # - Access via SSH + docker exec only
   # - OAuth credentials mounted read-only
   # - Token storage mounted for auth persistence
+  # - Local build since no official Docker image exists
   cat > "$compose_file" <<'YAML'
 # =============================================================================
 # docker-compose.yml — gogcli (Google Workspace CLI)
@@ -126,7 +169,8 @@ install_compose_file() {
 
 services:
   gogcli:
-    image: steipete/gogcli:latest
+    build: .
+    image: gogcli:local
     container_name: gogcli
     restart: unless-stopped
     security_opt:
@@ -172,16 +216,17 @@ EOF
 
 # ── Start container ──────────────────────────────────────────────────────────
 start_container() {
-  log_step "Starting gogcli container"
+  log_step "Building and starting gogcli container"
 
   if [[ "$DRY_RUN" == "true" ]]; then
-    log_info "Would start gogcli container"
+    log_info "Would build and start gogcli container"
     return 0
   fi
 
   cd "$GOGCLI_DIR"
   
-  docker compose pull --quiet
+  log_info "Building gogcli image (this may take a minute)..."
+  docker compose build --quiet
   docker compose up -d
 
   # Wait for container to be ready
@@ -248,6 +293,7 @@ main() {
 
   setup_directories
   write_credentials
+  install_dockerfile
   install_compose_file
   setup_alias
   start_container
