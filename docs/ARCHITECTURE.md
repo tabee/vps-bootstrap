@@ -1,193 +1,1066 @@
-# VPS Bootstrap — Architecture Reference
+# VPS Bootstrap — Architecture & Service Implementation Guide
 
-> **This document is for AI assistants** (Claude, GPT, Copilot, etc.) working on this codebase.
-> It defines the architectural principles that must be followed when adding or modifying services.
+> **This document is the authoritative reference for AI assistants** (GitHub Copilot, Claude, GPT, Cursor, etc.)
+> working on this codebase. It defines the exact patterns, conventions, and rules that MUST be followed
+> when adding or modifying services. Every instruction here is derived from the actual codebase.
 
 ---
 
-## Core Principles
+## Table of Contents
+
+1. [System Overview](#system-overview)
+2. [Core Principles (Non-Negotiable)](#core-principles-non-negotiable)
+3. [Network Architecture](#network-architecture)
+4. [Execution Flow](#execution-flow)
+5. [Library API Reference](#library-api-reference)
+6. [Two Service Types](#two-service-types)
+7. [Existing Services — Exact Patterns](#existing-services--exact-patterns)
+8. [Step-by-Step: Adding a New Web Service (Traefik)](#step-by-step-adding-a-new-web-service-traefik)
+9. [Step-by-Step: Adding a New CLI Service (SSH)](#step-by-step-adding-a-new-cli-service-ssh)
+10. [Complete Service Script Template](#complete-service-script-template)
+11. [Traefik Dynamic Config Patching](#traefik-dynamic-config-patching)
+12. [Checklist for New Services](#checklist-for-new-services)
+13. [Common Mistakes](#common-mistakes)
+14. [File Locations](#file-locations)
+15. [Decision Tree for AI](#decision-tree-for-ai)
+
+---
+
+## System Overview
+
+This project bootstraps a **hardened Debian 12 VPS** via Terraform + Bash.
+After bootstrap, the only public-facing service is **WireGuard VPN (UDP 51820)**.
+All other services are accessible only through the VPN tunnel.
+
+```
+Internet ──UDP/51820──► WireGuard VPN (10.100.0.0/24)
+                              │
+                    ┌─────────┴─────────┐
+                    │                   │
+              SSH (10.100.0.1)    Browser (HTTPS)
+                    │                   │
+              docker exec         Traefik (10.20.0.10:443)
+                    │                   │
+              CLI services      ┌───────┼───────┐───────┐
+                    │           │       │       │       │
+              gogcli (0.50)  whoami  gitea    n8n   [new]
+              tea (0.32)     (0.20)  (0.30)  (0.40) (0.XX)
+```
+
+### Bootstrap Phases
+
+| Phase | Scripts | Purpose |
+|-------|---------|---------|
+| **1: Base Security** | `01-system.sh`, `02-wireguard.sh`, `03-firewall.sh` | Packages, VPN, nftables |
+| **2: Services** | `04-docker.sh`, `05-traefik.sh`, `services/*.sh` | Docker, Traefik, app containers |
+| **3: Lockdown** | `06-harden.sh` | SSH VPN-only, root disabled |
+
+---
+
+## Core Principles (Non-Negotiable)
 
 ### 1. EVERYTHING RUNS IN DOCKER
 
-**No exceptions.** Every service must be a Docker container.
+**No exceptions.** Every service must be a Docker container on `vpn_net`.
 
-| ✅ Correct | ❌ Wrong |
-|------------|----------|
+| ✅ Correct | ❌ FORBIDDEN |
+|------------|-------------|
 | `docker-compose.yml` with service definition | Binary installed to `/usr/local/bin/` |
 | Container image from registry | `curl ... \| sh` install scripts |
-| Config mounted into container | Config in `/etc/` or `~/.config/` |
+| Config mounted as volume into container | Config in `/etc/` or `~/.config/` on host |
+| Local Dockerfile build (when no official image) | Compiling on host |
 
-**Why:** Consistency, reproducibility, easy cleanup, isolation.
+### 2. NO EXPOSED PORTS — EVER
 
----
+Containers must **NEVER** use `ports:` in docker-compose.yml.
 
-### 2. NO EXPOSED PORTS
+| ✅ Correct | ❌ FORBIDDEN |
+|------------|-------------|
+| Traefik file-provider routing (dynamic.yml) | `ports: ["8080:80"]` |
+| Internal Docker network communication only | `0.0.0.0:PORT` binding |
+| Access via Traefik (web) or `docker exec` (CLI) | Direct port access from host |
 
-Containers must **never** publish ports to the host.
+**Why:** Docker's iptables is disabled (`"iptables": false` in daemon.json). The nftables ruleset only forwards VPN traffic to Traefik (10.20.0.10). Published ports would be unreachable anyway and violate the security model.
 
-| ✅ Correct | ❌ Wrong |
-|------------|----------|
-| Traefik labels for routing | `ports: ["8080:80"]` |
-| Internal Docker network only | `0.0.0.0:PORT` binding |
-| Access via Traefik or SSH | Direct port access |
+### 3. NO DOCKER SOCKET — FILE PROVIDER ONLY
 
-**Why:** Security. Only WireGuard (51820) and HTTPS (443) are exposed to the internet.
+Traefik uses **file provider** (`dynamic.yml`), NOT Docker socket provider. This means:
 
----
+| ✅ This Project | ❌ NOT This Project |
+|-----------------|---------------------|
+| Routes defined in `/opt/traefik/dynamic.yml` | `labels:` on docker-compose services |
+| Service scripts patch `dynamic.yml` via Python | `traefik.http.routers.*` Docker labels |
+| Deterministic, auditable routing config | Runtime service discovery via socket |
 
-### 3. TWO ACCESS PATTERNS
+**Why:** Docker socket = root-equivalent access. File provider eliminates this attack vector.
 
-| Type | Services | How | Example |
-|------|----------|-----|---------|
-| **Web (Traefik)** | Gitea, n8n, whoami | HTTPS via reverse proxy | `https://gitea.domain.com` |
-| **CLI (SSH)** | gogcli, tea, admin tools | `docker exec` via SSH | `ssh admin@10.100.0.1 'tea repos ls'` |
-
-**Web services:** Use Traefik labels, accessed from anywhere via HTTPS.
-**CLI services:** No web interface, accessed only via VPN+SSH.
-
----
-
-### 4. CREDENTIALS VIA TERRAFORM
-
-Secrets and credentials should be passed through Terraform → `.env` → container.
+### 4. CREDENTIALS FLOW: Terraform → .env → Container
 
 ```
-terraform.tfvars          →  main.tf (env_content)  →  .env file  →  docker-compose.yml
-google_client_id = "..."     GOOGLE_CLIENT_ID=...      env_file: .env
+terraform.tfvars           →  variables.tf (declared)
+                           →  main.tf (env_content local)
+                           →  /opt/vps/bootstrap/.env (deployed to server)
+                           →  service script reads .env
+                           →  service .env file in /opt/<service>/.env
+                           →  docker-compose.yml env_file: .env
 ```
 
-**Why:** Single source of truth, no manual file copying, secrets in state (encrypted).
+Secrets generated by Terraform (`random_password`) or set in `terraform.tfvars`. Service scripts read from `${SCRIPT_DIR}/.env` (the bootstrap .env) and write service-specific `.env` files to `/opt/<service>/.env`.
 
 ---
 
-## Service Template
+## Network Architecture
 
-When adding a new service, follow this pattern:
+### IP Allocation Table
 
-### 1. variables.tf
+| IP Address | Service | Type | Port(s) |
+|------------|---------|------|---------|
+| 10.20.0.1 | Docker bridge gateway (`br-vpn`) | Infrastructure | — |
+| 10.20.0.10 | **Traefik** reverse proxy | Core | 443 (HTTPS), 2222 (Git SSH) |
+| 10.20.0.20 | **whoami** diagnostic service | Web | 80 |
+| 10.20.0.30 | **Gitea** git server | Web | 3000 (HTTP), 2222 (SSH) |
+| 10.20.0.31 | **Gitea PostgreSQL** | Database | 5432 |
+| 10.20.0.32 | **tea CLI** (Gitea sidecar) | CLI | — (sleep infinity) |
+| 10.20.0.40 | **n8n** workflow automation | Web | 5678 |
+| 10.20.0.41 | **n8n PostgreSQL** | Database | 5432 |
+| 10.20.0.50 | **gogcli** Google Workspace CLI | CLI | — (tail -f /dev/null) |
+| 10.20.0.51–59 | *Reserved for future CLI services* | — | — |
+| 10.20.0.60–69 | *Available for new web services* | — | — |
+| 10.20.0.70–79 | *Available for new web services + DBs* | — | — |
+| 10.100.0.0/24 | VPN client subnet | VPN | — |
+| 10.100.0.1 | VPN server (host) | VPN | 22 (SSH), 53 (DNS) |
+
+**Convention:** Services get IPs in blocks of 10. Databases always use the IP directly after their service (e.g., gitea=.30, gitea-pg=.31).
+
+### Docker Network: `vpn_net`
+
+```
+Network: vpn_net
+  Subnet:  10.20.0.0/24
+  Gateway: 10.20.0.1
+  Bridge:  br-vpn
+  Masquerade: disabled (nftables handles NAT)
+  Driver: bridge
+```
+
+Created by `04-docker.sh`. All containers MUST join this network with a static IP.
+
+### nftables Forwarding Rules
+
+The firewall (`03-firewall.sh`) only forwards VPN traffic to Traefik:
+
+```
+VPN clients (10.100.0.0/24) → Traefik (10.20.0.10) ports 80, 443, 2222 — ALLOWED
+VPN clients → any other Docker container — BLOCKED
+Container → Container (same vpn_net) — ALLOWED (Docker bridge)
+Container → Internet — ALLOWED via NAT (for pulling images, API calls)
+```
+
+### Traefik Middleware
+
+```yaml
+# All routers MUST use vpn-only middleware:
+middlewares:
+  vpn-only:
+    ipAllowList:
+      sourceRange:
+        - 10.100.0.0/24   # VPN clients
+        - 10.20.0.1/32     # Docker bridge gateway
+```
+
+---
+
+## Execution Flow
+
+### How `apply.sh` Invokes Services
+
+```
+apply.sh
+  ├── source lib/logging.sh
+  ├── source lib/backup.sh
+  ├── source bootstrap/.env           # auto-export with set -a
+  │
+  ├── PHASE 1: Base Security
+  │   ├── bash core/01-system.sh
+  │   ├── bash core/02-wireguard.sh
+  │   └── bash core/03-firewall.sh
+  │
+  ├── PHASE 2: Services
+  │   ├── bash core/04-docker.sh
+  │   ├── bash core/05-traefik.sh
+  │   ├── [ENABLE_WHOAMI=true]  → bash services/whoami.sh
+  │   ├── bash core/05-traefik.sh --post-deploy-acme
+  │   ├── [ENABLE_GITEA=true]   → bash services/gitea.sh
+  │   ├── [ENABLE_N8N=true]     → bash services/n8n.sh
+  │   └── [ENABLE_GOGCLI=true]  → bash services/gogcli.sh
+  │
+  └── PHASE 3: Lockdown
+      └── bash core/06-harden.sh
+```
+
+To add a new service, you must:
+1. Add `ENABLE_MYSERVICE` flag processing in `apply.sh`
+2. Add `[[ "$ENABLE_MYSERVICE" == "true" ]] && run_service_module "myservice"` in the Phase 2 section
+
+---
+
+## Library API Reference
+
+### `lib/logging.sh`
+
+All service scripts MUST `source "${SCRIPT_DIR}/lib/logging.sh"` and set `BOOTSTRAP_MODULE`.
+
+```bash
+BOOTSTRAP_MODULE="myservice"   # Sets context for log messages
+
+log_info "message"     # [INFO]  green
+log_warn "message"     # [WARN]  yellow
+log_error "message"    # [ERROR] red
+log_step "message"     # [STEP]  cyan — for major phases
+log_fatal "message"    # [FATAL] red + exit 1
+log_debug "message"    # [DEBUG] blue
+
+require_root           # Exit if not root
+module_start "name"    # Banner: "Starting module: name"
+module_done            # Banner: "Module completed successfully"
+```
+
+### `lib/backup.sh`
+
+All service scripts MUST `source "${SCRIPT_DIR}/lib/backup.sh"`.
+
+```bash
+install_content "$content" "$dest_file" "$mode" [$owner]
+# Writes $content to $dest_file atomically (temp + mv)
+# Backs up existing file if present
+# $mode = "0644" or "0600" (for secrets)
+# $owner = "root:root" (default)
+
+file_matches "$file" "$expected_content"
+# Returns 0 if file exists and content matches exactly
+# Used for idempotency checks
+
+backup_file "$path"
+# Creates timestamped backup of existing file
+# Called automatically by install_content
+```
+
+### Idempotency Pattern
+
+Every function that writes files MUST check first:
+
+```bash
+if file_matches "$compose_file" "$content"; then
+  log_info "docker-compose.yml already up to date"
+  return 0
+fi
+
+install_content "$content" "$compose_file" "0644"
+```
+
+### DRY_RUN Support
+
+Every function MUST support dry-run mode:
+
+```bash
+if [[ "$DRY_RUN" == "true" ]]; then
+  log_info "Would create $SERVICE_DIR"
+  return 0
+fi
+```
+
+---
+
+## Two Service Types
+
+### Type A: Web Service (Traefik-routed)
+
+**Examples:** Gitea, n8n, whoami
+
+- Has HTTP endpoint inside container
+- Accessed via `https://subdomain.${VPN_DOMAIN}` through Traefik
+- Requires Traefik route in `dynamic.yml`
+- May have database sidecar (PostgreSQL)
+
+**Required steps:**
+1. Service script with docker-compose.yml
+2. Patch `/opt/traefik/dynamic.yml` with router + service entries
+3. Traefik restart (automatic via file watch)
+
+### Type B: CLI Service (SSH + docker exec)
+
+**Examples:** gogcli, tea CLI
+
+- NO HTTP endpoint
+- Container runs `sleep infinity` or `tail -f /dev/null`
+- Accessed via `ssh admin@10.100.0.1 'docker exec <container> <cmd>'`
+- Typically has a wrapper script in `/usr/local/bin/`
+
+**Required steps:**
+1. Service script with docker-compose.yml
+2. Wrapper script in `/usr/local/bin/<tool>`
+3. No Traefik changes needed
+
+---
+
+## Existing Services — Exact Patterns
+
+### Pattern: whoami (Simplest Web Service)
+
+**File:** `bootstrap/services/whoami.sh` — ~115 lines
+
+The simplest service. Study this first.
+
+```
+Functions:
+  setup_directories()     → mkdir -p /opt/whoami
+  install_compose_file()  → writes docker-compose.yml with idempotency
+  deploy_whoami()         → docker compose up -d + wait loop
+
+main():
+  module_start → require_root → setup_directories → install_compose_file → deploy_whoami → module_done
+```
+
+Key properties:
+- No `.env` file needed (no secrets)
+- No database
+- No Traefik patching (route pre-defined in 05-traefik.sh)
+- `read_only: true` filesystem
+- Minimal compose: just image, container_name, security, network
+
+### Pattern: Gitea (Complex Web Service with DB + Sidecar)
+
+**File:** `bootstrap/services/gitea.sh` — ~445 lines
+
+The most complex service. Contains all patterns.
+
+```
+Functions:
+  setup_directories()     → mkdir -p gitea-data, pg-data, tea-config + chown 1000:1000
+  install_compose_file()  → 3 services: postgres, gitea, tea (sidecar)
+  install_env_file()      → writes /opt/gitea/.env with secrets (mode 0600)
+  deploy_gitea()          → docker compose up -d + health check wait loops
+  create_admin_user()     → waits for API + creates admin via gitea CLI
+  configure_tea()         → generates API token + configures tea login
+  setup_tea_alias()       → creates /usr/local/bin/tea wrapper
+
+main():
+  module_start → require_root → setup_directories → install_compose_file
+  → install_env_file → deploy_gitea → create_admin_user → setup_tea_alias
+  → configure_tea → module_done
+```
+
+Key properties:
+- PostgreSQL sidecar with health check
+- Service .env file separate from bootstrap .env (mode 0600)
+- `env_file: .env` in compose (Docker resolves variables from .env)
+- heredoc content assigned to variable, then compared with `file_matches`
+- `cap_drop: [ALL]` + `cap_add: [DAC_OVERRIDE, CHOWN, FOWNER, SETUID, SETGID]`
+- Post-deploy admin user creation via API
+- Traefik routes pre-defined in 05-traefik.sh (git-web and git-ssh)
+
+### Pattern: n8n (Web Service with Traefik Patching)
+
+**File:** `bootstrap/services/n8n.sh` — ~361 lines
+
+Demonstrates **Traefik dynamic.yml patching** — the pattern for all new web services.
+
+```
+Functions:
+  setup_directories()     → mkdir -p n8n-data, pg-data + chown 1000:1000
+  install_compose_file()  → 2 services: postgres, n8n
+  install_env_file()      → writes /opt/n8n/.env with secrets
+  patch_traefik_routes()  → Python script patches /opt/traefik/dynamic.yml
+  deploy_n8n()            → docker compose up -d + health check wait
+
+main():
+  module_start → require_root → setup_directories → install_compose_file
+  → install_env_file → patch_traefik_routes → deploy_n8n → module_done
+```
+
+Key properties:
+- `patch_traefik_routes()` uses **embedded Python3** to patch YAML
+- Inserts router under `http.routers` and service under `http.services`
+- Idempotent: checks if router already exists before patching
+- TLS block determined by `traefik_https_tls_block()` helper
+
+### Pattern: gogcli (CLI Service with Custom Docker Image)
+
+**File:** `bootstrap/services/gogcli.sh` — ~313 lines
+
+CLI-only service with local Dockerfile build.
+
+```
+Functions:
+  setup_directories()          → mkdir -p config, cache + chmod 700
+  write_credentials()          → writes credentials.json from Terraform vars
+  install_dockerfile()         → writes multi-stage Dockerfile inline
+  install_compose_file()       → cat > (not heredoc-variable pattern)
+  setup_alias()                → creates /usr/local/bin/gog wrapper
+  start_container()            → docker build + docker compose up
+  print_setup_instructions()   → post-deploy instructions
+
+main():
+  module_start → require_root → setup_directories → write_credentials
+  → install_dockerfile → install_compose_file → setup_alias
+  → start_container → print_setup_instructions → module_done
+```
+
+Key properties:
+- `command: ["tail", "-f", "/dev/null"]` to keep container alive
+- No Traefik routes needed
+- `docker build --network=host` for internet access during build
+- Wrapper script pattern for CLI access
+
+---
+
+## Step-by-Step: Adding a New Web Service (Traefik)
+
+Follow these steps **exactly and in order**. Every step is mandatory.
+
+### Step 1: Choose an IP Address
+
+Pick the next available IP from the [IP Allocation Table](#ip-allocation-table).
+For a service with database: use two consecutive IPs (e.g., 10.20.0.60 for app, 10.20.0.61 for DB).
+
+### Step 2: Add Terraform Variables (`variables.tf`)
 
 ```hcl
 variable "enable_myservice" {
-  description = "Install MyService? (Docker, Traefik/SSH access)"
+  description = "Install MyService? (myservice.<domain>)"
   type        = bool
   default     = false
 }
 
-variable "myservice_api_key" {
-  description = "API key for MyService"
+# Only if the service needs secrets:
+variable "myservice_secret_key" {
+  description = "Secret key for MyService"
   type        = string
   default     = ""
   sensitive   = true
 }
 ```
 
-### 2. main.tf (env_content)
+### Step 3: Add Auto-Generated Secrets (`main.tf`)
+
+If the service needs random credentials:
 
 ```hcl
+resource "random_password" "myservice_db" {
+  count   = var.enable_myservice ? 1 : 0
+  length  = 32
+  special = false
+}
+```
+
+### Step 4: Add to env_content in `main.tf`
+
+Add the service's environment variables to the `env_content` local in `main.tf`:
+
+```hcl
+# Inside locals { env_content = <<-EOT ... EOT }
+# Add in the "Service Flags" section:
+ENABLE_MYSERVICE="${var.enable_myservice}"
+
+# Add in the "Service Secrets" section:
 %{if var.enable_myservice~}
-MYSERVICE_API_KEY="${var.myservice_api_key}"
+MYSERVICE_DB_PASSWORD="${random_password.myservice_db[0].result}"
+MYSERVICE_SECRET_KEY="${var.myservice_secret_key}"
 %{endif~}
 ```
 
-### 3. bootstrap/services/myservice.sh
+### Step 5: Add to `apply.sh`
+
+Add the flag reading and service invocation:
+
+```bash
+# In the flag reading section (after other ENABLE_* lines):
+ENABLE_MYSERVICE="${ENABLE_MYSERVICE:-false}"
+
+# In Phase 2, after other optional services:
+[[ "$ENABLE_MYSERVICE" == "true" ]] && run_service_module "myservice"
+```
+
+### Step 6: Create Service Script (`bootstrap/services/myservice.sh`)
+
+See [Complete Service Script Template](#complete-service-script-template) below.
+The script MUST include `patch_traefik_routes()` for web services.
+
+### Step 7: Update `terraform.tfvars.example`
+
+```hcl
+# MyService (myservice.<domain>)
+enable_myservice = false
+# myservice_secret_key = ""
+```
+
+### Step 8: Update `outputs.tf`
+
+```hcl
+# In the credentials output:
+myservice = var.enable_myservice ? {
+  url         = "https://myservice.${var.domain}"
+  db_password = random_password.myservice_db[0].result
+} : null
+
+# In the services output:
+myservice = var.enable_myservice ? "https://myservice.${var.domain}" : null
+```
+
+### Step 9: Update `tests/smoke.sh`
+
+```bash
+# In structure tests:
+assert_file_exists "services/myservice.sh"
+
+# In syntax tests (add to the for loop):
+services/myservice.sh
+```
+
+### Step 10: Update `docs/SERVICES.md`
+
+Add a section documenting the service, its access URL, configuration, and usage.
+
+---
+
+## Step-by-Step: Adding a New CLI Service (SSH)
+
+Same as web service EXCEPT:
+
+- **Skip** the `patch_traefik_routes()` function entirely
+- **Add** a `setup_alias()` function that creates a wrapper in `/usr/local/bin/`
+- Container must use `command: ["tail", "-f", "/dev/null"]` or `entrypoint: ["/bin/sh", "-c", "sleep infinity"]`
+- No Traefik route, no TLS, no subdomain needed
+
+### CLI Wrapper Pattern
+
+```bash
+setup_alias() {
+  log_step "Setting up mytool alias for ${ADMIN_USER}"
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    log_info "Would create /usr/local/bin/mytool wrapper"
+    return 0
+  fi
+
+  cat > /usr/local/bin/mytool <<'EOF'
+#!/bin/bash
+# Wrapper for mytool in Docker
+if [ -t 0 ] && [ -t 1 ]; then
+  exec docker exec -it myservice mytool "$@"
+else
+  exec docker exec myservice mytool "$@"
+fi
+EOF
+  chmod +x /usr/local/bin/mytool
+
+  log_info "Created /usr/local/bin/mytool wrapper"
+}
+```
+
+---
+
+## Complete Service Script Template
+
+This is the **canonical template** for a new web service with database.
+Every function follows the exact pattern used in the existing codebase.
 
 ```bash
 #!/usr/bin/env bash
+# =============================================================================
+# services/myservice.sh — MyService + PostgreSQL (VPN-only via Traefik)
+# =============================================================================
+# Deploys:
+#   - PostgreSQL 16 (Alpine) at 10.20.0.XX
+#   - MyService at 10.20.0.XX
+#
+# Architecture:
+#   VPN → Traefik:443 → myservice.<domain> → MyService:PORT (HTTP)
+#
+# Security design:
+#   - NO published ports (no `ports:` directive)
+#   - Traffic must go through Traefik + vpn-only middleware (ipAllowList)
+#   - Secrets via environment variables (sourced from bootstrap/.env)
+#   - Containers with no-new-privileges + capability drop
+# =============================================================================
+
 set -euo pipefail
 
-# ... standard header ...
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "${SCRIPT_DIR}/lib/logging.sh"
+source "${SCRIPT_DIR}/lib/backup.sh"
 
-# Create docker-compose.yml
-cat > /opt/myservice/docker-compose.yml <<'YAML'
+BOOTSTRAP_MODULE="myservice"
+
+# Load environment
+if [[ -f "${SCRIPT_DIR}/.env" ]]; then
+  # shellcheck source=/dev/null
+  source "${SCRIPT_DIR}/.env"
+fi
+
+VPN_DOMAIN="${VPN_DOMAIN:-example.com}"
+MYSERVICE_DB_PASSWORD="${MYSERVICE_DB_PASSWORD:-__MYSERVICE_DB_PASSWORD__}"
+MYSERVICE_SECRET_KEY="${MYSERVICE_SECRET_KEY:-__MYSERVICE_SECRET_KEY__}"
+
+MYSERVICE_DIR="/opt/myservice"
+TRAEFIK_DYNAMIC="/opt/traefik/dynamic.yml"
+TRAEFIK_ACME_STATE_FILE="/opt/traefik/.acme-active"
+
+traefik_https_tls_block() {
+  if [[ -f "$TRAEFIK_ACME_STATE_FILE" ]] && grep -qx 'true' "$TRAEFIK_ACME_STATE_FILE"; then
+    cat <<'YAML'
+      tls:
+        certResolver: le
+YAML
+  else
+    echo '      tls: {}'
+  fi
+}
+
+# ── Create directory structure ───────────────────────────────────────────────
+setup_directories() {
+  log_step "Creating myservice directory structure"
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    log_info "Would create $MYSERVICE_DIR"
+    return 0
+  fi
+
+  mkdir -p "${MYSERVICE_DIR}/data"
+  mkdir -p "${MYSERVICE_DIR}/pg-data"
+
+  # Set ownership if service runs as non-root (check image docs)
+  chown -R 1000:1000 "${MYSERVICE_DIR}/data"
+
+  log_info "Created $MYSERVICE_DIR"
+}
+
+# ── Generate docker-compose.yml ──────────────────────────────────────────────
+install_compose_file() {
+  log_step "Installing myservice docker-compose.yml"
+
+  local compose_file="${MYSERVICE_DIR}/docker-compose.yml"
+
+  local content
+  content="$(cat <<'YAML'
+# =============================================================================
+# docker-compose.yml — MyService + PostgreSQL
+# =============================================================================
+# NO ports: directive — accessible only via Traefik (10.20.0.10).
+
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: myservice-postgres
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ./pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks:
+      vpn_net:
+        ipv4_address: 10.20.0.XX   # <-- REPLACE with actual IP+1
+
   myservice:
     image: vendor/myservice:latest
     container_name: myservice
     restart: unless-stopped
-    env_file: /opt/vps/bootstrap/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@10.20.0.XX:5432/${POSTGRES_DB}
     security_opt:
       - no-new-privileges:true
-    cap_drop:
-      - ALL
-    # NO ports: directive!
+    cap_drop: ["ALL"]
+    volumes:
+      - ./data:/app/data
     networks:
       vpn_net:
-        ipv4_address: 10.20.0.XX
-    labels:  # Only for web services
-      - "traefik.enable=true"
-      - "traefik.http.routers.myservice.rule=Host(`myservice.${DOMAIN}`)"
-      - "traefik.http.routers.myservice.tls.certresolver=letsencrypt"
+        ipv4_address: 10.20.0.XX   # <-- REPLACE with actual IP
 
 networks:
   vpn_net:
     external: true
 YAML
+)"
+
+  if file_matches "$compose_file" "$content"; then
+    log_info "docker-compose.yml already up to date"
+    return 0
+  fi
+
+  install_content "$content" "$compose_file" "0644"
+}
+
+# ── Generate .env file ──────────────────────────────────────────────────────
+install_env_file() {
+  log_step "Installing myservice .env file"
+
+  local env_file="${MYSERVICE_DIR}/.env"
+
+  if [[ "$MYSERVICE_DB_PASSWORD" == "__MYSERVICE_DB_PASSWORD__" ]]; then
+    log_warn "MYSERVICE_DB_PASSWORD not set — using placeholder"
+  fi
+
+  local content
+  content="$(cat <<EOF
+# Domain
+VPN_DOMAIN=${VPN_DOMAIN}
+
+# PostgreSQL
+POSTGRES_DB=myservice
+POSTGRES_USER=myservice
+POSTGRES_PASSWORD=${MYSERVICE_DB_PASSWORD}
+
+# MyService
+MYSERVICE_SECRET_KEY=${MYSERVICE_SECRET_KEY}
+EOF
+)"
+
+  if file_matches "$env_file" "$content"; then
+    log_info ".env already up to date"
+    return 0
+  fi
+
+  install_content "$content" "$env_file" "0600"
+}
+
+# ── Patch Traefik dynamic.yml ───────────────────────────────────────────────
+patch_traefik_routes() {
+  log_step "Ensuring Traefik route exists for myservice.${VPN_DOMAIN}"
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    log_info "Would patch ${TRAEFIK_DYNAMIC}"
+    return 0
+  fi
+
+  if [[ ! -f "$TRAEFIK_DYNAMIC" ]]; then
+    log_fatal "Traefik dynamic config not found at ${TRAEFIK_DYNAMIC}. Run core/05-traefik first."
+  fi
+
+  # Idempotency: do nothing if router already exists
+  if grep -qE '^\s*myservice:\s*$' "$TRAEFIK_DYNAMIC"; then
+    log_info "Traefik router 'myservice' already present"
+    return 0
+  fi
+
+  local tls_block
+  tls_block="$(traefik_https_tls_block)"
+
+  VPN_DOMAIN="$VPN_DOMAIN" TRAEFIK_DYNAMIC="$TRAEFIK_DYNAMIC" TLS_BLOCK="$tls_block" python3 - <<'PY'
+from pathlib import Path
+import os
+
+vpn_domain = os.environ["VPN_DOMAIN"]
+path = os.environ["TRAEFIK_DYNAMIC"]
+tls_block = os.environ["TLS_BLOCK"]
+p = Path(path)
+text = p.read_text(encoding="utf-8")
+
+router_snip = f"""
+
+    # MyService web UI
+    myservice:
+      entryPoints: ["websecure"]
+      rule: "Host(`myservice.{vpn_domain}`)"
+      middlewares: ["vpn-only"]
+      service: myservice-svc
+{tls_block}
+"""
+
+service_snip = """
+
+    myservice-svc:
+      loadBalancer:
+        servers:
+          - url: "http://10.20.0.XX:PORT"
+"""
+# ^^^ REPLACE XX with service IP, PORT with container HTTP port
+
+if "\n    myservice:\n" in text or "\n    myservice-svc:\n" in text:
+    raise SystemExit(0)
+
+needle_services = "\n  services:\n"
+if needle_services not in text:
+    raise SystemExit("Could not find 'http.services' section in Traefik dynamic.yml")
+
+text = text.replace(needle_services, router_snip + needle_services, 1)
+
+needle_tcp = "\n# ── TCP routers"
+if needle_tcp not in text:
+    needle_tcp = "\ntcp:\n"
+    if needle_tcp not in text:
+        raise SystemExit("Could not find tcp section in Traefik dynamic.yml")
+    text = text.replace(needle_tcp, service_snip + needle_tcp, 1)
+else:
+    text = text.replace(needle_tcp, service_snip + needle_tcp, 1)
+
+p.write_text(text, encoding="utf-8")
+PY
+
+  chmod 0644 "$TRAEFIK_DYNAMIC"
+
+  log_info "✅ Added Traefik router+service for myservice.${VPN_DOMAIN}"
+}
+
+# ── Deploy stack ────────────────────────────────────────────────────────────
+deploy_myservice() {
+  log_step "Deploying myservice stack"
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    log_info "Would deploy myservice via docker compose"
+    return 0
+  fi
+
+  cd "${MYSERVICE_DIR}"
+
+  # NOTE: Avoid `docker compose pull` — can hang in non-interactive
+  # Terraform remote-exec sessions. `up -d` pulls missing images.
+  docker compose up -d --remove-orphans
+
+  # Wait for postgres health (if applicable)
+  log_info "Waiting for PostgreSQL health check..."
+  local i=0
+  while [[ $i -lt 60 ]]; do
+    if docker inspect --format='{{.State.Health.Status}}' myservice-postgres 2>/dev/null | grep -q healthy; then
+      log_info "myservice PostgreSQL is healthy"
+      break
+    fi
+    sleep 2
+    i=$((i + 2))
+  done
+
+  # Wait for main container
+  i=0
+  while [[ $i -lt 30 ]]; do
+    if docker ps --filter "name=^/myservice$" --filter "status=running" --format '{{.Names}}' | grep -q '^myservice$'; then
+      log_info "myservice container is running"
+      return 0
+    fi
+    sleep 1
+    i=$((i + 1))
+  done
+
+  log_warn "myservice may not be fully started yet"
+}
+
+# ── Main ─────────────────────────────────────────────────────────────────────
+main() {
+  module_start "$BOOTSTRAP_MODULE"
+  require_root
+
+  setup_directories
+  install_compose_file
+  install_env_file
+  patch_traefik_routes
+  deploy_myservice
+
+  module_done
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi
 ```
 
 ---
 
-## Network Layout
+## Traefik Dynamic Config Patching
 
+### How It Works
+
+Traefik watches `/opt/traefik/dynamic.yml` for changes (file provider with `watch: true`). When a service script modifies this file, Traefik automatically reloads routes — no restart needed.
+
+### Patching Pattern (Python3)
+
+All web services use embedded Python3 to patch `dynamic.yml`. The pattern:
+
+1. **Read** the current file
+2. **Check** if route already exists (idempotency)
+3. **Insert** router snippet before `services:` section
+4. **Insert** service snippet before `tcp:` section
+5. **Write** back
+
+### Router Snippet Structure
+
+```yaml
+    # Comment describing the service
+    myservice:
+      entryPoints: ["websecure"]
+      rule: "Host(`myservice.{vpn_domain}`)"
+      middlewares: ["vpn-only"]    # MANDATORY — restricts to VPN
+      service: myservice-svc
+      tls:
+        certResolver: le           # Or tls: {} if ACME not active
 ```
-Internet
-    │
-    ├─ UDP 51820 → WireGuard VPN
-    │               └─ 10.100.0.0/24 (VPN clients)
-    │
-    └─ TCP 443 → Traefik reverse proxy
-                  └─ 10.20.0.0/24 (Docker services)
 
-VPN client → 10.100.0.1 (server VPN IP)
-           → SSH → docker exec → container
-           → Browser → Traefik → container
+### Service Snippet Structure
+
+```yaml
+    myservice-svc:
+      loadBalancer:
+        servers:
+          - url: "http://10.20.0.XX:PORT"
+```
+
+### TLS Block Selection
+
+Use `traefik_https_tls_block()` to dynamically choose between ACME and self-signed:
+
+```bash
+traefik_https_tls_block() {
+  if [[ -f "$TRAEFIK_ACME_STATE_FILE" ]] && grep -qx 'true' "$TRAEFIK_ACME_STATE_FILE"; then
+    cat <<'YAML'
+      tls:
+        certResolver: le
+YAML
+  else
+    echo '      tls: {}'
+  fi
+}
 ```
 
 ---
 
 ## Checklist for New Services
 
-- [ ] Service runs as Docker container
-- [ ] No `ports:` directive in docker-compose.yml
-- [ ] Web services: Traefik labels configured
-- [ ] CLI services: Wrapper script for `docker exec`
-- [ ] Credentials via Terraform variables (sensitive = true)
-- [ ] Network: `vpn_net` with static IP (10.20.0.XX)
-- [ ] Security: `no-new-privileges`, `cap_drop: ALL`
-- [ ] Documentation: Section in docs/SERVICES.md
+### Mandatory for ALL Services
+
+- [ ] Script at `bootstrap/services/<name>.sh`
+- [ ] `set -euo pipefail` at top
+- [ ] Sources `lib/logging.sh` and `lib/backup.sh`
+- [ ] Sets `BOOTSTRAP_MODULE="<name>"`
+- [ ] Sources `${SCRIPT_DIR}/.env` if it exists
+- [ ] All functions support `DRY_RUN` mode
+- [ ] All file writes use `file_matches` + `install_content` (idempotent)
+- [ ] `main()` calls `module_start` / `require_root` / `module_done`
+- [ ] `if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then main "$@"; fi` at bottom
+- [ ] Docker container on `vpn_net` with static IP
+- [ ] `security_opt: [no-new-privileges:true]`
+- [ ] `cap_drop: ["ALL"]` (add back only what's needed)
+- [ ] NO `ports:` directive in docker-compose.yml
+- [ ] `ENABLE_<NAME>` variable in `apply.sh`
+- [ ] `enable_<name>` variable in `variables.tf` (default: false)
+- [ ] `ENABLE_<NAME>` added to `env_content` in `main.tf`
+- [ ] Entry in `terraform.tfvars.example`
+- [ ] Section in `docs/SERVICES.md`
+- [ ] Tests in `tests/smoke.sh` (file exists + bash syntax)
+
+### Additional for Web Services (Traefik-routed)
+
+- [ ] `patch_traefik_routes()` function with Python3 YAML patching
+- [ ] `traefik_https_tls_block()` helper function
+- [ ] Router uses `middlewares: ["vpn-only"]`
+- [ ] Service URL in `outputs.tf`
+- [ ] Subdomain documented (e.g., `myservice.<domain>`)
+
+### Additional for CLI Services (SSH access)
+
+- [ ] Container uses `sleep infinity` or `tail -f /dev/null`
+- [ ] `setup_alias()` creates `/usr/local/bin/<tool>` wrapper
+- [ ] Wrapper handles interactive (`-it`) vs non-interactive exec
+- [ ] Access command documented in `outputs.tf`
+
+### Additional for Services with Database
+
+- [ ] PostgreSQL 16 Alpine sidecar
+- [ ] Database container name: `<service>-postgres`
+- [ ] Database IP: service IP + 1
+- [ ] Health check on PostgreSQL (`pg_isready`)
+- [ ] `depends_on: postgres: condition: service_healthy`
+- [ ] Service `.env` file with mode `0600`
+- [ ] `random_password` resource in `main.tf` (conditional on enable flag)
+- [ ] DB password in `env_content` and `credentials` output
 
 ---
 
 ## Common Mistakes
 
-| Mistake | Fix |
-|---------|-----|
-| Installing binary on host | Create Docker image or use existing |
-| Using `ports:` | Use Traefik labels or SSH access |
-| Config in `~/.config/` | Mount config dir into container |
-| Manual credential setup | Add to terraform.tfvars |
-| Exposing API endpoint | Use Traefik or SSH tunnel |
+| Mistake | Correct Approach |
+|---------|-----------------|
+| Using `ports:` in docker-compose | Remove `ports:`. Use Traefik route or `docker exec` |
+| Using Docker labels for Traefik routing | Use file provider: patch `dynamic.yml` via Python3 |
+| Using Docker socket provider for Traefik | File provider only — socket = root escalation vector |
+| Installing binaries on host | Create Docker container (local build if no official image) |
+| Config files in `~/.config/` or `/etc/` on host | Mount config directory into container as volume |
+| Hard-coding credentials in scripts | Use Terraform variables → `.env` → `env_file:` |
+| Using `docker compose pull` in scripts | Use `docker compose up -d` only (pull hangs in remote-exec) |
+| Missing `file_matches` idempotency check | Always check before writing with `file_matches` |
+| Missing `DRY_RUN` support | Every function must support `DRY_RUN=true` |
+| Container without security hardening | Always: `no-new-privileges`, `cap_drop: ALL` |
+| Using `echo` instead of `log_*` functions | Use `log_info`, `log_step`, `log_warn`, etc. |
+| Forgetting to join `vpn_net` | All containers MUST be on `vpn_net` with static IP |
 
 ---
 
 ## File Locations
 
-| Purpose | Path |
-|---------|------|
-| Terraform config | `terraform.tfvars` |
-| Service scripts | `bootstrap/services/*.sh` |
-| Environment file | `/opt/vps/bootstrap/.env` |
-| Service data | `/opt/<service>/` |
-| Docker compose | `/opt/<service>/docker-compose.yml` |
-| Traefik config | `/opt/traefik/` |
+| Purpose | Path (on dev machine) | Path (on server) |
+|---------|----------------------|-------------------|
+| Terraform config | `terraform.tfvars` | — |
+| Terraform variables | `variables.tf` | — |
+| Terraform main | `main.tf` | — |
+| Terraform outputs | `outputs.tf` | — |
+| Bootstrap orchestrator | `bootstrap/apply.sh` | `{repo_path}/bootstrap/apply.sh` |
+| Logging library | `bootstrap/lib/logging.sh` | `{repo_path}/bootstrap/lib/logging.sh` |
+| Backup library | `bootstrap/lib/backup.sh` | `{repo_path}/bootstrap/lib/backup.sh` |
+| Service scripts | `bootstrap/services/*.sh` | `{repo_path}/bootstrap/services/*.sh` |
+| Core scripts | `bootstrap/core/*.sh` | `{repo_path}/bootstrap/core/*.sh` |
+| Bootstrap env | — | `{repo_path}/bootstrap/.env` |
+| Service data | — | `/opt/<service>/` |
+| Service compose | — | `/opt/<service>/docker-compose.yml` |
+| Service env | — | `/opt/<service>/.env` |
+| Traefik static config | — | `/opt/traefik/traefik.yml` |
+| Traefik dynamic config | — | `/opt/traefik/dynamic.yml` |
+| Traefik compose | — | `/opt/traefik/docker-compose.yml` |
+| ACME certificates | — | `/opt/traefik/letsencrypt/acme.json` |
+| Smoke tests | `tests/smoke.sh` | — |
 
 ---
 
-## Questions AI Should Ask
+## Decision Tree for AI
 
-When implementing a new service or modifying existing:
+When implementing a new service, answer these questions in order:
 
-1. **Does it run in Docker?** → If not, containerize it.
-2. **Are ports exposed?** → Remove `ports:`, use Traefik/SSH.
-3. **How are credentials handled?** → Add to Terraform variables.
-4. **Web or CLI access?** → Traefik labels vs docker exec wrapper.
-5. **Is documentation updated?** → Update docs/SERVICES.md.
+```
+1. Does the service need a web UI?
+   ├── YES → Type A (Web Service with Traefik)
+   │         → Needs: static IP, compose, .env, patch_traefik_routes(), subdomain
+   └── NO  → Type B (CLI Service via SSH)
+             → Needs: static IP, compose, .env, setup_alias(), sleep infinity
+
+2. Does it need a database?
+   ├── YES → Add PostgreSQL 16 Alpine sidecar
+   │         → IP = service IP + 1
+   │         → Health check + depends_on
+   │         → random_password in main.tf
+   └── NO  → No database setup needed
+
+3. Does an official Docker image exist?
+   ├── YES → Use `image: vendor/name:tag` in compose
+   └── NO  → Write inline Dockerfile + `build: .` in compose
+             → `docker build --network=host` for build-time internet
+
+4. Does it need secrets/credentials?
+   ├── YES → Add to variables.tf (sensitive=true)
+   │         → Add to env_content in main.tf
+   │         → Read from ${SCRIPT_DIR}/.env
+   │         → Write to /opt/<service>/.env (mode 0600)
+   └── NO  → No .env file needed (like whoami)
+
+5. Does it need post-deploy setup? (admin user, token, etc.)
+   ├── YES → Add setup function after deploy (with API wait loop)
+   └── NO  → Just deploy and verify container is running
+```
