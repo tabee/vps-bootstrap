@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import threading
 
 SECRET = os.environ.get("MKDOCS_WEBHOOK_SECRET", "")
@@ -25,6 +26,8 @@ GITEA_PASS = os.environ.get("GITEA_ADMIN_PASSWORD", "")
 REPO_DIR = "/workspace/repo"
 SITE_DIR = "/workspace/site"
 BUILD_LOCK = threading.Lock()
+GIT_RETRIES = 5
+GIT_RETRY_DELAY = 2
 
 
 def git_url_with_auth(url: str) -> str:
@@ -42,6 +45,33 @@ def verify_signature(payload: bytes, signature: str) -> bool:
     return hmac.compare_digest(expected, signature)
 
 
+def run_git(args, cwd=None):
+    """Run git with retries for transient Gitea/network startup issues."""
+    last_error = None
+    for attempt in range(1, GIT_RETRIES + 1):
+        try:
+            return subprocess.run(
+                args,
+                cwd=cwd,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            last_error = exc
+            if attempt == GIT_RETRIES:
+                raise
+            print(
+                f"[builder] git command failed (attempt {attempt}/{GIT_RETRIES}), retrying...",
+                flush=True,
+            )
+            if getattr(exc, "stderr", ""):
+                print(f"[builder] stderr: {exc.stderr}", file=sys.stderr, flush=True)
+            time.sleep(GIT_RETRY_DELAY)
+
+    raise last_error  # pragma: no cover
+
+
 def rebuild() -> None:
     """Clone/pull and build. Thread-safe."""
     if not BUILD_LOCK.acquire(blocking=False):
@@ -53,27 +83,15 @@ def rebuild() -> None:
         auth_url = git_url_with_auth(REPO_URL)
         if os.path.exists(os.path.join(REPO_DIR, ".git")):
             print(f"[builder] Pulling {BRANCH}...", flush=True)
-            subprocess.run(
-                ["git", "-C", REPO_DIR, "fetch", "origin"],
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-            subprocess.run(
-                ["git", "-C", REPO_DIR, "reset", "--hard", f"origin/{BRANCH}"],
-                check=True,
-                capture_output=True,
-                text=True,
-            )
+            run_git(["git", "-C", REPO_DIR, "remote", "set-url", "origin", auth_url])
+            run_git(["git", "-C", REPO_DIR, "fetch", "origin"])
+            run_git(["git", "-C", REPO_DIR, "reset", "--hard", f"origin/{BRANCH}"])
         else:
             print(f"[builder] Cloning {BRANCH}...", flush=True)
-            os.makedirs(REPO_DIR, exist_ok=True)
-            subprocess.run(
-                ["git", "clone", "-b", BRANCH, "--single-branch", auth_url, REPO_DIR],
-                check=True,
-                capture_output=True,
-                text=True,
-            )
+            if os.path.exists(REPO_DIR):
+                shutil.rmtree(REPO_DIR)
+            os.makedirs(os.path.dirname(REPO_DIR), exist_ok=True)
+            run_git(["git", "clone", "-b", BRANCH, "--single-branch", auth_url, REPO_DIR])
 
         # Build into a temporary directory outside the mounted site volume.
         # The site volume itself is a Docker mountpoint and cannot be renamed.

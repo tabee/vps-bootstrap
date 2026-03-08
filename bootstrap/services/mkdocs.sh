@@ -46,12 +46,13 @@ MKDOCS_REPO_BRANCH="${MKDOCS_REPO_BRANCH:-main}"
 
 # Gitea connection (internal Docker network — no Traefik needed)
 GITEA_INTERNAL_URL="http://10.20.0.30:3000"
+GITEA_BUILDER_URL="http://gitea:3000"
 GITEA_ADMIN_USER="${GITEA_ADMIN_USER:-gitea-admin}"
 GITEA_ADMIN_PASSWORD="${GITEA_ADMIN_PASSWORD:-}"
 
 # Derived
 MKDOCS_REPO_NAME="docs"
-MKDOCS_REPO_URL="${GITEA_INTERNAL_URL}/${GITEA_ADMIN_USER}/${MKDOCS_REPO_NAME}.git"
+MKDOCS_REPO_URL="${GITEA_BUILDER_URL}/${GITEA_ADMIN_USER}/${MKDOCS_REPO_NAME}.git"
 MKDOCS_WEBHOOK_INTERNAL_URL="http://10.20.0.62:9000/webhook"
 
 MKDOCS_DIR="/opt/mkdocs"
@@ -392,7 +393,24 @@ deploy_mkdocs() {
 
   # Build the webhook/builder image
   log_info "Building mkdocs-builder image..."
-  docker build --network=host -t mkdocs-builder:local --quiet -f Dockerfile.builder .
+  local attempt
+  local built=false
+  for attempt in 1 2 3; do
+    if DOCKER_BUILDKIT=0 docker build --network=host -t mkdocs-builder:local --quiet -f Dockerfile.builder .; then
+      built=true
+      break
+    fi
+
+    log_warn "mkdocs-builder image build failed (attempt ${attempt}/3)"
+    if [[ "$attempt" -lt 3 ]]; then
+      log_info "Retrying mkdocs-builder build in 5 seconds..."
+      sleep 5
+    fi
+  done
+
+  if [[ "$built" != "true" ]]; then
+    log_fatal "Failed to build mkdocs-builder image after 3 attempts"
+  fi
 
   docker compose up -d --remove-orphans
 

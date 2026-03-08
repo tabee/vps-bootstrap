@@ -129,6 +129,10 @@ configure_docker_daemon() {
   "iptables": false,
   "ip6tables": false,
   "userland-proxy": false,
+  "dns": [
+    "1.1.1.1",
+    "8.8.8.8"
+  ],
   "log-driver": "json-file",
   "log-opts": {
     "max-size": "10m",
@@ -150,6 +154,34 @@ JSON
     systemctl restart docker.service
     log_info "Docker daemon restarted with hardened config"
   fi
+}
+
+# ── Ensure host DNS works for Docker registry access ────────────────────────
+ensure_host_dns_for_docker() {
+  log_step "Ensuring host DNS works for Docker image pulls"
+
+  local resolv_conf="/etc/resolv.conf"
+  local content
+  content="$(cat <<'EOF'
+nameserver 1.1.1.1
+nameserver 8.8.8.8
+EOF
+)"
+
+  if [[ ! -f "$resolv_conf" ]] || \
+     ! grep -q '^nameserver[[:space:]]' "$resolv_conf" 2>/dev/null || \
+     grep -Eq '^[[:space:]]*nameserver[[:space:]]+(127\.0\.0\.[0-9]+|::1|127\.0\.0\.53)[[:space:]]*$' "$resolv_conf"; then
+    if file_matches "$resolv_conf" "$content"; then
+      log_info "/etc/resolv.conf already uses public resolvers"
+      return 0
+    fi
+
+    install_content "$content" "$resolv_conf" "0644"
+    log_info "Configured public DNS resolvers for Docker pulls"
+    return 0
+  fi
+
+  log_info "Host DNS already uses non-loopback resolvers"
 }
 
 # ── Enable Docker service ───────────────────────────────────────────────────
@@ -228,7 +260,8 @@ validate_docker() {
   local cfg="/etc/docker/daemon.json"
   if grep -q '"iptables"[[:space:]]*:[[:space:]]*false' "$cfg" && \
      grep -q '"ip6tables"[[:space:]]*:[[:space:]]*false' "$cfg" && \
-     grep -q '"userland-proxy"[[:space:]]*:[[:space:]]*false' "$cfg"; then
+     grep -q '"userland-proxy"[[:space:]]*:[[:space:]]*false' "$cfg" && \
+     grep -q '"dns"[[:space:]]*:' "$cfg"; then
     log_info "✅ Docker daemon hardening flags correct"
   else
     log_error "❌ Docker daemon hardening flags incorrect"
@@ -265,6 +298,7 @@ main() {
   require_root
 
   install_docker
+  ensure_host_dns_for_docker
   add_admin_to_docker_group
   configure_docker_daemon
   enable_docker

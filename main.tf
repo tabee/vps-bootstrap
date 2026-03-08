@@ -178,8 +178,9 @@ resource "null_resource" "clone_repo" {
   provisioner "remote-exec" {
     inline = [
       "set -e",
+      "if [ ! -f /etc/resolv.conf ] || ! grep -q '^nameserver[[:space:]]' /etc/resolv.conf || grep -Eq '^[[:space:]]*nameserver[[:space:]]+(127\\.0\\.0\\.[0-9]+|127\\.0\\.0\\.53|::1)[[:space:]]*$' /etc/resolv.conf; then printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' | sudo tee /etc/resolv.conf >/dev/null; fi",
       "sudo apt-get update -qq && sudo apt-get install -y -qq git",
-      "if [ -d ${var.repo_path}/.git ]; then sudo git -C ${var.repo_path} fetch origin && sudo git -C ${var.repo_path} reset --hard origin/${var.git_ref}; else sudo rm -rf ${var.repo_path} && sudo git clone --branch ${var.git_ref} ${var.git_repo_url} ${var.repo_path}; fi",
+      "for attempt in 1 2 3; do if [ -d ${var.repo_path}/.git ]; then sudo git -C ${var.repo_path} fetch origin && sudo git -C ${var.repo_path} reset --hard origin/${var.git_ref}; else sudo rm -rf ${var.repo_path} && sudo git clone --branch ${var.git_ref} ${var.git_repo_url} ${var.repo_path}; fi && exit 0; sleep 5; done; exit 1",
     ]
   }
 }
@@ -256,11 +257,67 @@ resource "null_resource" "deploy_acme_json" {
 }
 
 # =============================================================================
+# Sync Local Bootstrap Fixes
+# =============================================================================
+
+resource "null_resource" "sync_bootstrap_files" {
+  depends_on = [null_resource.clone_repo]
+
+  triggers = {
+    clone_id            = null_resource.clone_repo.id
+    docker_core_hash    = filesha256("${path.module}/bootstrap/core/04-docker.sh")
+    gogcli_service_hash = filesha256("${path.module}/bootstrap/services/gogcli.sh")
+    mkdocs_service_hash = filesha256("${path.module}/bootstrap/services/mkdocs.sh")
+    mkdocs_webhook_hash = filesha256("${path.module}/bootstrap/services/mkdocs-webhook.py")
+  }
+
+  connection {
+    type        = "ssh"
+    host        = local.effective_ssh_host
+    user        = local.effective_ssh_user
+    port        = var.ssh_port
+    agent       = local.use_ssh_agent
+    private_key = local.ssh_private_key
+  }
+
+  provisioner "file" {
+    source      = "${path.module}/bootstrap/core/04-docker.sh"
+    destination = "/tmp/04-docker.sh"
+  }
+
+  provisioner "file" {
+    source      = "${path.module}/bootstrap/services/gogcli.sh"
+    destination = "/tmp/gogcli.sh"
+  }
+
+  provisioner "file" {
+    source      = "${path.module}/bootstrap/services/mkdocs.sh"
+    destination = "/tmp/mkdocs.sh"
+  }
+
+  provisioner "file" {
+    source      = "${path.module}/bootstrap/services/mkdocs-webhook.py"
+    destination = "/tmp/mkdocs-webhook.py"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "set -e",
+      "sudo install -m 0755 /tmp/04-docker.sh ${var.repo_path}/bootstrap/core/04-docker.sh",
+      "sudo install -m 0755 /tmp/gogcli.sh ${var.repo_path}/bootstrap/services/gogcli.sh",
+      "sudo install -m 0755 /tmp/mkdocs.sh ${var.repo_path}/bootstrap/services/mkdocs.sh",
+      "sudo install -m 0755 /tmp/mkdocs-webhook.py ${var.repo_path}/bootstrap/services/mkdocs-webhook.py",
+      "rm -f /tmp/04-docker.sh /tmp/gogcli.sh /tmp/mkdocs.sh /tmp/mkdocs-webhook.py",
+    ]
+  }
+}
+
+# =============================================================================
 # Run Bootstrap
 # =============================================================================
 
 resource "null_resource" "bootstrap" {
-  depends_on = [null_resource.deploy_env, null_resource.deploy_acme_json]
+  depends_on = [null_resource.deploy_env, null_resource.deploy_acme_json, null_resource.sync_bootstrap_files]
 
   triggers = {
     env_hash   = sha256(local.env_content)

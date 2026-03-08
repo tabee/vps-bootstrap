@@ -226,8 +226,27 @@ start_container() {
   cd "$GOGCLI_DIR"
   
   log_info "Building gogcli image (this may take a minute)..."
-  # Use host network for build so containers can access internet
-  docker build --network=host -t gogcli:local --quiet .
+  # Use the classic builder here because BuildKit can inherit a loopback DNS
+  # resolver from the host and fail during registry lookups in bootstrap.
+  local attempt
+  local built=false
+  for attempt in 1 2 3; do
+    if DOCKER_BUILDKIT=0 docker build --network=host -t gogcli:local --quiet .; then
+      built=true
+      break
+    fi
+
+    log_warn "gogcli image build failed (attempt ${attempt}/3)"
+    if [[ "$attempt" -lt 3 ]]; then
+      log_info "Retrying gogcli build in 5 seconds..."
+      sleep 5
+    fi
+  done
+
+  if [[ "$built" != "true" ]]; then
+    log_fatal "Failed to build gogcli image after 3 attempts"
+  fi
+
   docker compose up -d
 
   # Wait for container to be ready

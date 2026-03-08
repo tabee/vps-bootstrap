@@ -321,6 +321,39 @@ sync_app_ini_db_password() {
   fi
 }
 
+# ── Ensure webhook settings allow internal Docker network ───────────────────
+ensure_webhook_settings() {
+  log_step "Ensuring Gitea webhook settings allow internal Docker network"
+
+  local app_ini="${GITEA_DIR}/gitea-data/gitea/conf/app.ini"
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    log_info "Would ensure [webhook] section in ${app_ini}"
+    return 0
+  fi
+
+  if [[ ! -f "$app_ini" ]]; then
+    log_info "No existing app.ini yet (will be created by Gitea)"
+    return 0
+  fi
+
+  # Check if webhook section already exists
+  if grep -qE '^\[webhook\]' "$app_ini"; then
+    log_info "Webhook section already present in app.ini"
+    return 0
+  fi
+
+  # Append webhook configuration to allow internal Docker network
+  cat >> "$app_ini" <<'EOF'
+
+[webhook]
+ALLOWED_HOST_LIST = 10.20.0.0/24
+SKIP_TLS_VERIFY = false
+EOF
+
+  log_info "✅ Added [webhook] section to app.ini (ALLOWED_HOST_LIST = 10.20.0.0/24)"
+}
+
 # ── Deploy Gitea stack ──────────────────────────────────────────────────────
 deploy_gitea() {
   log_step "Deploying Gitea stack"
@@ -533,6 +566,7 @@ main() {
   install_env_file
   sync_app_ini_db_password
   deploy_gitea
+  ensure_webhook_settings
   create_admin_user
   setup_tea_alias
   configure_tea

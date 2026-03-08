@@ -47,6 +47,16 @@ REQUIRED_PACKAGES=(
   iproute2
 )
 
+vpn_dnsmasq_is_configured() {
+  local vpn_conf="/etc/dnsmasq.d/vpn.conf"
+
+  [[ -f "$vpn_conf" ]] || return 1
+  grep -q '^interface=wg0$' "$vpn_conf" || return 1
+  grep -q '^bind-interfaces$' "$vpn_conf" || return 1
+  grep -q '^listen-address=10\.100\.0\.1$' "$vpn_conf" || return 1
+  ss -ulnp | grep -q '10\.100\.0\.1:53'
+}
+
 # ── Prepare DNS resolution ──────────────────────────────────────────────────
 # Hetzner images may have dnsmasq pre-installed. Stop it before installation.
 # We use /etc/resolv.conf directly (not systemd-resolved - not on all images).
@@ -55,9 +65,13 @@ prepare_dns_resolution() {
 
   # Check if dnsmasq is running and blocking DNS
   if systemctl is-active --quiet dnsmasq 2>/dev/null; then
-    log_info "Stopping pre-installed dnsmasq (will configure for VPN later)"
-    systemctl stop dnsmasq || true
-    # Don't disable yet - we'll configure it properly for VPN later
+    if vpn_dnsmasq_is_configured; then
+      log_info "Preserving dnsmasq — it is already serving VPN DNS on wg0"
+    else
+      log_info "Stopping pre-installed dnsmasq (will configure for VPN later)"
+      systemctl stop dnsmasq || true
+      # Don't disable yet - we'll configure it properly for VPN later
+    fi
   fi
 
   # Ensure /etc/resolv.conf has working nameservers
@@ -104,9 +118,13 @@ install_packages() {
   # This breaks systemd-resolved which we need for apt operations.
   # dnsmasq will be configured properly later to listen only on wg0.
   if systemctl is-active --quiet dnsmasq 2>/dev/null; then
-    log_info "Stopping dnsmasq (auto-started by apt, conflicts with systemd-resolved)"
-    systemctl stop dnsmasq || true
-    systemctl disable dnsmasq || true
+    if vpn_dnsmasq_is_configured; then
+      log_info "Preserving dnsmasq — VPN clients currently depend on it for DNS"
+    else
+      log_info "Stopping dnsmasq (auto-started by apt, conflicts with systemd-resolved)"
+      systemctl stop dnsmasq || true
+      systemctl disable dnsmasq || true
+    fi
   fi
 
   # Ensure DNS is working via /etc/resolv.conf (systemd-resolved not available)
