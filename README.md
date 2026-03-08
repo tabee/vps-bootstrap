@@ -57,6 +57,8 @@ enable_gitea  = false   # Git server
 enable_n8n    = false   # Workflow automation
 enable_whoami = true    # Test service
 enable_gogcli = false   # Google Workspace CLI
+enable_mkdocs = false   # Documentation site (requires Gitea)
+enable_kuma   = false   # Uptime monitoring
 
 # VPN clients
 vpn_clients = ["admin", "laptop", "phone"]
@@ -185,19 +187,19 @@ Store securely (password manager).
 │   (public web services only)    │    │    (admin access only)      │
 └─────────────────────────────────┘    └─────────────────────────────┘
                     │                              │
-        ┌───────────┼───────────┐                  │
-        ▼           ▼           ▼                  ▼
-   ┌────────┐  ┌────────┐  ┌─────────┐      ┌─────────────┐
-   │ Gitea  │  │  n8n   │  │ whoami  │      │     SSH     │
-   │  :3000 │  │ :5678  │  │   :80   │      │   → CLI     │
-   └────────┘  └────────┘  └─────────┘      │   → gogcli  │
+    ┌───────┬───────┼───────┬───────┐              │
+    ▼       ▼       ▼       ▼       ▼              ▼
+ ┌──────┐┌──────┐┌──────┐┌──────┐┌──────┐   ┌─────────────┐
+ │Gitea ││ n8n  ││MkDocs││ Kuma ││whoami│   │     SSH     │
+ │:3000 ││:5678 ││:8080 ││:3001 ││ :80  │   │   → CLI     │
+ └──────┘└──────┘└──────┘└──────┘└──────┘   │   → gogcli  │
                                             │   → admin   │
                                             └─────────────┘
 ```
 
 | Access Type | Services | How |
 |-------------|----------|-----|
-| **Web (Traefik)** | Gitea, n8n, whoami | `https://service.domain` from anywhere |
+| **Web (Traefik)** | Gitea, n8n, whoami, MkDocs, Kuma | `https://service.domain` from anywhere |
 | **VPN (SSH)** | gogcli, CLI tools, admin | Connect VPN → `ssh admin@10.100.0.1` |
 
 > **TODO:** CLI-Addon für Service-Zugriff via VPN ohne Browser (Roadmap).
@@ -226,7 +228,7 @@ Internet
     ▼ VPN only
 ┌─────────────────────────────────────┐
 │  Traefik → HTTPS services           │
-│  Docker  → Gitea, n8n, whoami       │
+│  Docker  → Gitea, n8n, MkDocs, Kuma │
 │  SSH     → admin user, gogcli       │
 └─────────────────────────────────────┘
 ```

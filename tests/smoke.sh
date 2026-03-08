@@ -76,6 +76,7 @@ assert_file_exists "services/n8n.sh"
 assert_file_exists "services/whoami.sh"
 assert_file_exists "services/gogcli.sh"
 assert_file_exists "services/mkdocs.sh"
+assert_file_exists "services/kuma.sh"
 
 # Scripts
 assert_file_exists "scripts/vpn-client.sh"
@@ -89,7 +90,7 @@ for script in apply.sh \
               core/03-firewall.sh core/04-docker.sh \
               core/05-traefik.sh core/06-harden.sh \
               services/gitea.sh services/n8n.sh services/whoami.sh \
-              services/gogcli.sh services/mkdocs.sh \
+              services/gogcli.sh services/mkdocs.sh services/kuma.sh \
               scripts/vpn-client.sh; do
   assert_executable "$script"
 done
@@ -148,6 +149,7 @@ assert "variables.tf: has vpn_clients" grep -q 'vpn_clients' "${ROOT_DIR}/variab
 assert "variables.tf: has enable_gitea" grep -q 'enable_gitea' "${ROOT_DIR}/variables.tf"
 assert "variables.tf: has enable_gogcli" grep -q 'enable_gogcli' "${ROOT_DIR}/variables.tf"
 assert "variables.tf: has enable_mkdocs" grep -q 'enable_mkdocs' "${ROOT_DIR}/variables.tf"
+assert "variables.tf: has enable_kuma" grep -q 'enable_kuma' "${ROOT_DIR}/variables.tf"
 assert "variables.tf: has acme_json_path" grep -q 'acme_json_path' "${ROOT_DIR}/variables.tf"
 assert "main.tf: uses null_resource" grep -q 'null_resource' "${ROOT_DIR}/main.tf"
 assert "main.tf: syncs vpn_clients" grep -q 'vpn-client.sh sync' "${ROOT_DIR}/main.tf"

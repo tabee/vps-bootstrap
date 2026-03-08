@@ -106,6 +106,7 @@ ENABLE_N8N="${ENABLE_N8N:-false}"
 ENABLE_WHOAMI="${ENABLE_WHOAMI:-true}"
 ENABLE_GOGCLI="${ENABLE_GOGCLI:-false}"
 ENABLE_MKDOCS="${ENABLE_MKDOCS:-false}"
+ENABLE_KUMA="${ENABLE_KUMA:-false}"
 ADMIN_USER="${ADMIN_USER:-admin}"
 
 # ── Lock-file to prevent concurrent execution ───────────────────────────────
@@ -207,6 +208,7 @@ main() {
   [[ "$ENABLE_N8N" == "true" ]] && run_service_module "n8n"
   [[ "$ENABLE_GOGCLI" == "true" ]] && run_service_module "gogcli"
   [[ "$ENABLE_MKDOCS" == "true" ]] && run_service_module "mkdocs"
+  [[ "$ENABLE_KUMA" == "true" ]] && run_service_module "kuma"
   
   # ─────────────────────────────────────────────────────────────────────────
   # PHASE 3: Lockdown (handled by Terraform after VPN clients are created)

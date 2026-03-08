@@ -54,8 +54,7 @@
 | Gitea | `gitea` | Traefik → `https://gitea.DOMAIN` | `enable_gitea = true` || tea CLI | `gitea-tea` | SSH → `tea <command>` | (included with Gitea) || n8n | `n8n` | Traefik → `https://n8n.DOMAIN` | `enable_n8n = true` |
 | whoami | `whoami` | Traefik → `https://whoami.DOMAIN` | `enable_whoami = true` |
 | gogcli | `gogcli` | SSH → `gog <command>` | `enable_gogcli = true` |
-| MkDocs | `mkdocs-nginx` + `mkdocs-webhook` | Traefik → `https://docs.DOMAIN` | `enable_mkdocs = true` |
-
+| MkDocs | `mkdocs-nginx` + `mkdocs-webhook` | Traefik → `https://docs.DOMAIN` | `enable_mkdocs = true` || Uptime Kuma | `kuma` | Traefik → `https://status.DOMAIN` | `enable_kuma = true` |
 ---
 
 ## Gitea
@@ -371,6 +370,83 @@ Data directories:
 - Config: `/opt/mkdocs/`
 - Site data: Docker volume `site_data`
 - Git repo: Docker volume `repo_data`
+
+---
+
+## Uptime Kuma (Monitoring)
+
+Self-hosted service monitoring with web dashboard. Monitor HTTP(S), TCP, Ping, DNS, Docker containers, and more.
+
+### Architecture
+
+```
+  VPN Client                    Traefik                    Uptime Kuma
+  ─────────── ───────► status.<domain>:443 ───────► 10.20.0.70:3001
+                          (websecure)                  (HTTP)
+                                                          │
+                                                          ▼
+                                     ┌─────────────────────────────────┐
+                                     │  Monitors internal services:    │
+                                     │  • Traefik (10.20.0.10)         │
+                                     │  • Gitea (10.20.0.30)           │
+                                     │  • n8n (10.20.0.40)             │
+                                     │  • MkDocs (10.20.0.60)          │
+                                     │  • External URLs                │
+                                     └─────────────────────────────────┘
+```
+
+### Configuration
+
+```hcl
+enable_kuma = true
+```
+
+### Access
+
+- **URL:** `https://status.YOUR_DOMAIN`
+- **Setup:** Create admin account on first visit
+- **Data:** `/opt/kuma/data/` (SQLite database)
+
+### Features
+
+- **20+ monitor types:** HTTP(S), TCP, Ping, DNS, Docker, Push, Steam Game Server...
+- **Notifications:** Discord, Slack, Telegram, Email, Webhook, and 90+ more
+- **Status pages:** Public or private status pages
+- **Multi-language:** 30+ languages supported
+- **2FA:** Two-factor authentication support
+
+### Recommended Monitors
+
+After setup, add these monitors for internal services:
+
+| Service | Type | URL / Host | Expected |
+|---------|------|------------|----------|
+| Traefik | HTTP | `http://10.20.0.10:8080/ping` | 200 OK |
+| Gitea | HTTP | `http://10.20.0.30:3000/api/healthz` | 200 OK |
+| n8n | HTTP | `http://10.20.0.40:5678/healthz` | 200 OK |
+| MkDocs | HTTP | `http://10.20.0.60:8080/` | 200 OK |
+| PostgreSQL (Gitea) | TCP | `10.20.0.31:5432` | Connection OK |
+| PostgreSQL (n8n) | TCP | `10.20.0.41:5432` | Connection OK |
+
+### Container Details
+
+| Property | Value |
+|----------|-------|
+| Container | `kuma` |
+| Image | `louislam/uptime-kuma:1` |
+| Network | `vpn_net` (10.20.0.70) |
+| Internal Port | 3001 |
+| Data | `/opt/kuma/data/` |
+| Exposed Ports | **none** (Traefik only) |
+
+### Security
+
+- Docker socket mounted read-only for container monitoring
+- No published ports — all access via Traefik + VPN
+- `no-new-privileges` + `cap_drop: ALL`
+- Admin account required (no guest access)
+
+📖 **Vollständige Dokumentation:** [louislam/uptime-kuma](https://github.com/louislam/uptime-kuma)
 
 ---
 

@@ -61,6 +61,11 @@ output "credentials" {
       repo           = "https://git.${var.domain}/${var.gitea_admin_user}/docs"
       webhook_secret = var.mkdocs_webhook_secret != "" ? var.mkdocs_webhook_secret : random_password.mkdocs_webhook_secret[0].result
     } : null
+
+    kuma = var.enable_kuma ? {
+      url  = "https://status.${var.domain}"
+      note = "Create admin account on first visit"
+    } : null
   }
 }
 
@@ -76,6 +81,7 @@ output "services" {
     whoami = var.enable_whoami ? "https://whoami.${var.domain}" : null
     gogcli = var.enable_gogcli ? "ssh ${var.admin_user}@${local.vpn_server_ip} 'gog <command>'" : null
     mkdocs = var.enable_mkdocs ? "https://docs.${var.domain}" : null
+    kuma   = var.enable_kuma ? "https://status.${var.domain}" : null
   }
 }
 

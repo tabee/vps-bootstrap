@@ -28,8 +28,8 @@
 
 ## IP Allocation
 
-Used: .10 (Traefik), .20 (whoami), .30-.32 (Gitea+PG+tea), .40-.41 (n8n+PG), .50 (gogcli), .60+.62 (MkDocs nginx+webhook)
-Next available: 10.20.0.70+ for new services
+Used: .10 (Traefik), .20 (whoami), .30-.32 (Gitea+PG+tea), .40-.41 (n8n+PG), .50 (gogcli), .60+.62 (MkDocs nginx+webhook), .70 (Kuma)
+Next available: 10.20.0.71+ for new services
 
 ## Architecture Reference
 

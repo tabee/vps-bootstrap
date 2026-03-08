@@ -184,6 +184,12 @@ variable "enable_mkdocs" {
   default     = false
 }
 
+variable "enable_kuma" {
+  description = "Install Uptime Kuma monitoring? (status.<domain>)"
+  type        = bool
+  default     = false
+}
+
 variable "mkdocs_webhook_secret" {
   description = "Webhook secret for Gitea → MkDocs rebuild (auto-generated if empty)"
   type        = string

@@ -44,4 +44,4 @@ Touch these files in order:
 
 ## Next Available IPs
 
-10.20.0.70+ (used: .10 Traefik, .20 whoami, .30-.32 Gitea, .40-.41 n8n, .50 gogcli, .60+.62 MkDocs)
+10.20.0.71+ (used: .10 Traefik, .20 whoami, .30-.32 Gitea, .40-.41 n8n, .50 gogcli, .60+.62 MkDocs, .70 Kuma)
