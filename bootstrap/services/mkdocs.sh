@@ -124,165 +124,14 @@ install_webhook_script() {
   log_step "Installing webhook.py"
 
   local webhook_file="${MKDOCS_DIR}/webhook.py"
+  local template_file="${SCRIPT_DIR}/services/mkdocs-webhook.py"
+
+  if [[ ! -f "$template_file" ]]; then
+    log_fatal "MkDocs webhook template not found: ${template_file}"
+  fi
 
   local content
-  content='#!/usr/bin/env python3
-"""
-Gitea webhook receiver + mkdocs builder.
-- Listens on :9000
-- Validates HMAC-SHA256 signature
-- git clone/pull + mkdocs build into shared volume
-- Initial build on startup
-"""
-import hashlib
-import hmac
-import http.server
-import json
-import os
-import shutil
-import subprocess
-import sys
-import threading
-
-SECRET = os.environ.get("MKDOCS_WEBHOOK_SECRET", "")
-REPO_URL = os.environ.get("MKDOCS_REPO_URL", "")
-BRANCH = os.environ.get("MKDOCS_REPO_BRANCH", "main")
-GITEA_USER = os.environ.get("GITEA_ADMIN_USER", "")
-GITEA_PASS = os.environ.get("GITEA_ADMIN_PASSWORD", "")
-REPO_DIR = "/workspace/repo"
-SITE_DIR = "/workspace/site"
-BUILD_LOCK = threading.Lock()
-
-
-def git_url_with_auth(url):
-    """Inject credentials into git URL for private repos."""
-    if GITEA_USER and GITEA_PASS and "://" in url:
-        proto, rest = url.split("://", 1)
-        return f"{proto}://{GITEA_USER}:{GITEA_PASS}@{rest}"
-    return url
-
-
-def verify_signature(payload: bytes, signature: str) -> bool:
-    if not SECRET:
-        return True
-    expected = hmac.new(SECRET.encode(), payload, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, signature)
-
-
-def rebuild():
-    """Clone/pull and build. Thread-safe."""
-    if not BUILD_LOCK.acquire(blocking=False):
-        print("[builder] Build already in progress, skipping", flush=True)
-        return
-    try:
-        auth_url = git_url_with_auth(REPO_URL)
-        if os.path.exists(os.path.join(REPO_DIR, ".git")):
-            print(f"[builder] Pulling {BRANCH}...", flush=True)
-            subprocess.run(
-                ["git", "-C", REPO_DIR, "fetch", "origin"],
-                check=True, capture_output=True, text=True,
-            )
-            subprocess.run(
-                ["git", "-C", REPO_DIR, "reset", "--hard", f"origin/{BRANCH}"],
-                check=True, capture_output=True, text=True,
-            )
-        else:
-            print(f"[builder] Cloning {BRANCH}...", flush=True)
-            os.makedirs(REPO_DIR, exist_ok=True)
-            subprocess.run(
-                ["git", "clone", "-b", BRANCH, "--single-branch", auth_url, REPO_DIR],
-                check=True, capture_output=True, text=True,
-            )
-
-        # Build into temp dir, then swap atomically
-        tmp_site = SITE_DIR + ".tmp"
-        if os.path.exists(tmp_site):
-            shutil.rmtree(tmp_site)
-
-        subprocess.run(
-            ["python3", "-m", "mkdocs", "build", "--strict", "--site-dir", tmp_site],
-            cwd=REPO_DIR, check=True,
-        )
-
-        # Atomic swap: rename old, rename new, remove old
-        old_site = SITE_DIR + ".old"
-        if os.path.exists(old_site):
-            shutil.rmtree(old_site)
-        if os.path.exists(SITE_DIR):
-            os.rename(SITE_DIR, old_site)
-        os.rename(tmp_site, SITE_DIR)
-        if os.path.exists(old_site):
-            shutil.rmtree(old_site)
-
-        print(f"[builder] Build complete -> {SITE_DIR}", flush=True)
-    except subprocess.CalledProcessError as e:
-        print(f"[builder] Build FAILED: {e}", file=sys.stderr, flush=True)
-        if hasattr(e, "stderr") and e.stderr:
-            print(f"[builder] stderr: {e.stderr}", file=sys.stderr, flush=True)
-    except Exception as e:
-        print(f"[builder] Build FAILED: {e}", file=sys.stderr, flush=True)
-    finally:
-        BUILD_LOCK.release()
-
-
-class WebhookHandler(http.server.BaseHTTPRequestHandler):
-    def do_POST(self):
-        if self.path != "/webhook":
-            self.send_response(404)
-            self.end_headers()
-            return
-
-        length = int(self.headers.get("Content-Length", 0))
-        payload = self.rfile.read(length)
-        signature = self.headers.get("X-Gitea-Signature", "")
-
-        if not verify_signature(payload, signature):
-            print("[webhook] Invalid signature", flush=True)
-            self.send_response(403)
-            self.end_headers()
-            self.wfile.write(b"Invalid signature")
-            return
-
-        # Branch filter
-        try:
-            data = json.loads(payload)
-            ref = data.get("ref", "")
-            if ref and ref != f"refs/heads/{BRANCH}":
-                self.send_response(200)
-                self.end_headers()
-                self.wfile.write(b"Skipped: wrong branch")
-                return
-        except (json.JSONDecodeError, KeyError):
-            pass
-
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"Build triggered")
-
-        # Build in background thread so response returns immediately
-        threading.Thread(target=rebuild, daemon=True).start()
-
-    def do_GET(self):
-        if self.path == "/healthz":
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(b"ok")
-            return
-        self.send_response(404)
-        self.end_headers()
-
-    def log_message(self, fmt, *args):
-        print(f"[webhook] {args[0]}", flush=True)
-
-
-if __name__ == "__main__":
-    # Initial build on startup
-    print("[builder] Initial build on startup...", flush=True)
-    rebuild()
-
-    server = http.server.HTTPServer(("0.0.0.0", 9000), WebhookHandler)
-    print("[webhook] Listening on :9000", flush=True)
-    server.serve_forever()'
+  content="$(cat "$template_file")"
 
   if file_matches "$webhook_file" "$content"; then
     log_info "webhook.py already up to date"
@@ -302,7 +151,7 @@ install_dockerfile() {
   content='FROM python:3.12-alpine
 
 RUN apk add --no-cache git openssh-client && \
-    pip install --no-cache-dir mkdocs-material
+    pip install --no-cache-dir "mkdocs<2" "mkdocs-material<10"
 
 RUN adduser -D -u 1000 mkdocs && \
     mkdir -p /workspace/site /workspace/repo && \
