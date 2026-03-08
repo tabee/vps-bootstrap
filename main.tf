@@ -140,8 +140,9 @@ MKDOCS_WEBHOOK_SECRET="${var.mkdocs_webhook_secret != "" ? var.mkdocs_webhook_se
 VPN_CLIENTS="${join(",", var.vpn_clients)}"
 EOT
 
-  # Always skip hardening in apply.sh - Terraform runs it after VPN clients exist
-  bootstrap_command = "sudo bash ${var.repo_path}/bootstrap/apply.sh --skip-harden"
+  # Always skip hardening in apply.sh - Terraform runs it after VPN clients exist.
+  # When connected over VPN, also skip WireGuard module to avoid SSH drop during network reconfiguration.
+  bootstrap_command = var.use_vpn ? "sudo bash ${var.repo_path}/bootstrap/apply.sh --skip-harden --skip-wireguard" : "sudo bash ${var.repo_path}/bootstrap/apply.sh --skip-harden"
 
   # Use SSH-Agent when no explicit key is provided
   use_ssh_agent   = var.ssh_private_key == "" && var.ssh_private_key_path == ""

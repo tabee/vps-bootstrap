@@ -44,6 +44,7 @@ BOOTSTRAP_MODULE="apply"
 # ── Parse arguments ─────────────────────────────────────────────────────────
 DRY_RUN="${DRY_RUN:-false}"
 SKIP_HARDEN="${SKIP_HARDEN:-false}"
+SKIP_WIREGUARD="${SKIP_WIREGUARD:-false}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -56,6 +57,10 @@ while [[ $# -gt 0 ]]; do
       SKIP_HARDEN=true
       shift
       ;;
+    --skip-wireguard)
+      SKIP_WIREGUARD=true
+      shift
+      ;;
     --help|-h)
       cat <<EOF
 Usage: $0 [OPTIONS]
@@ -63,6 +68,7 @@ Usage: $0 [OPTIONS]
 Options:
   --dry-run, -n     Show what would be done without making changes
   --skip-harden     Skip final hardening (SSH remains accessible via WAN)
+  --skip-wireguard  Skip WireGuard module (useful for VPN-based re-runs)
   --help, -h        Show this help message
 
 Environment:
@@ -175,7 +181,11 @@ main() {
   log_step "════════════════════════════════════════════════════════════════"
   
   run_core_module "01-system"
-  run_core_module "02-wireguard"
+  if [[ "$SKIP_WIREGUARD" == "true" ]]; then
+    log_info "Skipping 02-wireguard (--skip-wireguard enabled)"
+  else
+    run_core_module "02-wireguard"
+  fi
   run_core_module "03-firewall"
   
   # ─────────────────────────────────────────────────────────────────────────

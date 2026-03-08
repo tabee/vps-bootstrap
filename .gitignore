@@ -28,3 +28,4 @@ terraform.tfstate.*
 Thumbs.db
 .terraform.lock.hcl
 .terraform.tfstate.lock.info
+acme.json
