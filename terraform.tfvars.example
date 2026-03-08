@@ -72,6 +72,8 @@ enable_mkdocs = false
 # Uptime Kuma monitoring (status.<domain>)
 # Self-hosted service monitoring with web dashboard
 enable_kuma = false
+# kuma_admin_user     = "kuma-admin"  # Admin username
+# kuma_admin_password = ""            # Auto-generated if empty
 
 # Google OAuth credentials (optional - can be added later manually)
 # Get from: https://console.cloud.google.com/apis/credentials

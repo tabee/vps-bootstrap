@@ -486,13 +486,32 @@ Self-hosted service monitoring with web dashboard. Monitor HTTP(S), TCP, Ping, D
 
 ```hcl
 enable_kuma = true
+# kuma_admin_user     = "kuma-admin"  # Admin username (default: kuma-admin)
+# kuma_admin_password = ""            # Auto-generated if empty
 ```
 
 ### Access
 
 - **URL:** `https://status.YOUR_DOMAIN`
-- **Setup:** Create admin account on first visit
+- **User:** `kuma-admin` (or custom via `kuma_admin_user`)
+- **Password:** Auto-generated, retrieve with:
+  ```bash
+  terraform output -json credentials | jq '.kuma'
+  ```
 - **Data:** `/opt/kuma/data/` (SQLite database)
+
+### Auto-Provisioning
+
+On first deployment, the system automatically:
+
+1. **Creates admin user** with credentials from Terraform
+2. **Provisions monitors** for all enabled services:
+   - Traefik (via whoami) — if `enable_whoami = true`
+   - Gitea + PostgreSQL — if `enable_gitea = true`
+   - n8n + PostgreSQL — if `enable_n8n = true`
+   - MkDocs — if `enable_mkdocs = true`
+
+This ensures a fresh install has the same monitoring setup as the original.
 
 ### Features
 
@@ -504,7 +523,7 @@ enable_kuma = true
 
 ### Recommended Monitors
 
-After setup, add these monitors for internal services:
+The following monitors are auto-provisioned on first install. You can add more manually:
 
 | Service | Type | URL / Host | Expected |
 |---------|------|------------|----------|

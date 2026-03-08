@@ -66,8 +66,9 @@ output "credentials" {
     } : null
 
     kuma = var.enable_kuma ? {
-      url  = "https://status.${var.domain}"
-      note = "Create admin account on first visit"
+      url            = "https://status.${var.domain}"
+      admin_user     = var.kuma_admin_user
+      admin_password = var.kuma_admin_password != "" ? var.kuma_admin_password : random_password.kuma_admin_password[0].result
     } : null
   }
 }

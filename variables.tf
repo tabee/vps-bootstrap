@@ -190,6 +190,19 @@ variable "enable_kuma" {
   default     = false
 }
 
+variable "kuma_admin_user" {
+  description = "Uptime Kuma admin username"
+  type        = string
+  default     = "kuma-admin"
+}
+
+variable "kuma_admin_password" {
+  description = "Uptime Kuma admin password (auto-generated if empty)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 variable "mkdocs_webhook_secret" {
   description = "Webhook secret for Gitea → MkDocs rebuild (auto-generated if empty)"
   type        = string

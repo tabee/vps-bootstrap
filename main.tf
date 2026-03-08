@@ -79,6 +79,12 @@ resource "random_password" "mkdocs_webhook_secret" {
   special = false
 }
 
+resource "random_password" "kuma_admin_password" {
+  count   = var.enable_kuma && var.kuma_admin_password == "" ? 1 : 0
+  length  = 24
+  special = false
+}
+
 # =============================================================================
 # Bootstrap Environment File
 # =============================================================================
@@ -135,6 +141,10 @@ GOOGLE_PROJECT_ID="${var.google_project_id}"
 %{endif~}
 %{if var.enable_mkdocs~}
 MKDOCS_WEBHOOK_SECRET="${var.mkdocs_webhook_secret != "" ? var.mkdocs_webhook_secret : random_password.mkdocs_webhook_secret[0].result}"
+%{endif~}
+%{if var.enable_kuma~}
+KUMA_ADMIN_USER="${var.kuma_admin_user}"
+KUMA_ADMIN_PASSWORD="${var.kuma_admin_password != "" ? var.kuma_admin_password : random_password.kuma_admin_password[0].result}"
 %{endif~}
 
 # ── VPN Clients ──────────────────────────────────────────────────────────────
