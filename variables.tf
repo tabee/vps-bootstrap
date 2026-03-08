@@ -287,6 +287,52 @@ variable "hostname" {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
+# ADDITIONAL RESTRICTED USERS
+# ═══════════════════════════════════════════════════════════════════════════
+# Users with limited access via CLI (SSH) and/or Web (WireGuard VPN).
+# Groups:
+#   - vpn-cli: SSH access to CLI wrappers (gog, n8n, tea, psql-*)
+#   - vpn-web: WireGuard VPN peer for web UI access via Traefik
+#
+# Keys are auto-generated if not provided.
+
+variable "additional_users" {
+  description = "Additional restricted users with group memberships"
+  type = list(object({
+    username   = string
+    ssh_pubkey = optional(string, "")  # Auto-generated if empty
+    groups     = list(string)          # "vpn-cli", "vpn-web"
+  }))
+  default = []
+
+  validation {
+    condition = alltrue([
+      for user in var.additional_users : alltrue([
+        for group in user.groups : contains(["vpn-cli", "vpn-web"], group)
+      ])
+    ])
+    error_message = "Groups must be 'vpn-cli' and/or 'vpn-web'."
+  }
+
+  validation {
+    condition = alltrue([
+      for user in var.additional_users : can(regex("^[a-z_][a-z0-9_-]{2,31}$", user.username))
+    ])
+    error_message = "Username must be 3-32 chars, start with letter/underscore, contain only a-z, 0-9, _, -"
+  }
+
+  validation {
+    condition = alltrue([
+      for user in var.additional_users : !contains(
+        ["root", "admin", "docker", "traefik", "git", "postgres", "nobody", "wireguard", "kuma", "gitea", "n8n"],
+        user.username
+      )
+    ])
+    error_message = "Username cannot be a reserved system name."
+  }
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
 # BOOTSTRAP OPTIONS
 # ═══════════════════════════════════════════════════════════════════════════
 

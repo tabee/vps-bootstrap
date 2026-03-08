@@ -24,6 +24,10 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.0"
     }
+    tls = {
+      source  = "hashicorp/tls"
+      version = "~> 4.0"
+    }
   }
 }
 
@@ -83,6 +87,19 @@ resource "random_password" "kuma_admin_password" {
   count   = var.enable_kuma && var.kuma_admin_password == "" ? 1 : 0
   length  = 24
   special = false
+}
+
+# =============================================================================
+# Additional Users - SSH Key Generation
+# =============================================================================
+
+# Generate SSH keys for users who didn't provide them
+resource "tls_private_key" "user_ssh" {
+  for_each = {
+    for user in var.additional_users : user.username => user
+    if user.ssh_pubkey == ""
+  }
+  algorithm = "ED25519"
 }
 
 # =============================================================================
@@ -149,6 +166,15 @@ KUMA_ADMIN_PASSWORD="${var.kuma_admin_password != "" ? var.kuma_admin_password :
 
 # ── VPN Clients ──────────────────────────────────────────────────────────────
 VPN_CLIENTS="${join(",", var.vpn_clients)}"
+
+# ── Additional Restricted Users ──────────────────────────────────────────────
+ADDITIONAL_USERS='${jsonencode([
+  for user in var.additional_users : {
+    username   = user.username
+    groups     = user.groups
+    ssh_pubkey = user.ssh_pubkey != "" ? user.ssh_pubkey : tls_private_key.user_ssh[user.username].public_key_openssh
+  }
+])}'
 EOT
 
   # ACME JSON: seed server with existing Let's Encrypt certificate if available
@@ -283,6 +309,7 @@ resource "null_resource" "sync_bootstrap_files" {
     kuma_service_hash   = filesha256("${path.module}/bootstrap/services/kuma.sh")
     n8n_service_hash    = filesha256("${path.module}/bootstrap/services/n8n.sh")
     gitea_service_hash  = filesha256("${path.module}/bootstrap/services/gitea.sh")
+    users_service_hash  = filesha256("${path.module}/bootstrap/services/users.sh")
   }
 
   connection {
@@ -329,6 +356,11 @@ resource "null_resource" "sync_bootstrap_files" {
     destination = "/tmp/kuma.sh"
   }
 
+  provisioner "file" {
+    source      = "${path.module}/bootstrap/services/users.sh"
+    destination = "/tmp/users.sh"
+  }
+
   provisioner "remote-exec" {
     inline = [
       "set -e",
@@ -339,7 +371,8 @@ resource "null_resource" "sync_bootstrap_files" {
       "sudo install -m 0755 /tmp/n8n.sh ${var.repo_path}/bootstrap/services/n8n.sh",
       "sudo install -m 0755 /tmp/gitea.sh ${var.repo_path}/bootstrap/services/gitea.sh",
       "sudo install -m 0755 /tmp/kuma.sh ${var.repo_path}/bootstrap/services/kuma.sh",
-      "rm -f /tmp/04-docker.sh /tmp/gogcli.sh /tmp/mkdocs.sh /tmp/mkdocs-webhook.py /tmp/n8n.sh /tmp/gitea.sh /tmp/kuma.sh",
+      "sudo install -m 0755 /tmp/users.sh ${var.repo_path}/bootstrap/services/users.sh",
+      "rm -f /tmp/04-docker.sh /tmp/gogcli.sh /tmp/mkdocs.sh /tmp/mkdocs-webhook.py /tmp/n8n.sh /tmp/gitea.sh /tmp/kuma.sh /tmp/users.sh",
     ]
   }
 }

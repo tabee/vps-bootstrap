@@ -560,6 +560,39 @@ EOF
 }
 ```
 
+### Integrating with Restricted Users (vpn-cli)
+
+To make CLI commands accessible to restricted users, add a wrapper to `bootstrap/services/users.sh`:
+
+**1. In `install_cli_wrappers()` function:**
+
+```bash
+if [[ "$ENABLE_MYSERVICE" == "true" ]]; then
+    install_content /usr/local/bin/mytool-cli 0755 << 'EOF'
+#!/bin/bash
+# MyTool CLI wrapper — requires vpn-cli group
+set -euo pipefail
+if ! groups 2>/dev/null | grep -qw vpn-cli; then
+    echo "Error: vpn-cli group membership required" >&2
+    exit 1
+fi
+exec docker exec -i myservice mytool "$@"
+EOF
+fi
+```
+
+**2. In `setup_user_commands()` function, add the symlink:**
+
+```bash
+[[ "$ENABLE_MYSERVICE" == "true" ]] && ln -sf /usr/local/bin/mytool-cli "$user_bin/mytool"
+```
+
+**Key differences from admin CLI wrapper:**
+- Use `-i` flag (not `-it`) for non-TTY SSH sessions
+- Group membership check required (`vpn-cli`)
+- Installed to `/usr/local/bin/*-cli` pattern
+- Symlinked to user's `~/bin` directory
+
 ---
 
 ## Complete Service Script Template

@@ -210,6 +210,11 @@ main() {
   [[ "$ENABLE_MKDOCS" == "true" ]] && run_service_module "mkdocs"
   [[ "$ENABLE_KUMA" == "true" ]] && run_service_module "kuma"
   
+  # Additional restricted users (vpn-cli / vpn-web)
+  if [[ -n "${ADDITIONAL_USERS:-}" ]] && [[ "${ADDITIONAL_USERS}" != "[]" ]]; then
+    run_service_module "users"
+  fi
+  
   # ─────────────────────────────────────────────────────────────────────────
   # PHASE 3: Lockdown (handled by Terraform after VPN clients are created)
   # ─────────────────────────────────────────────────────────────────────────

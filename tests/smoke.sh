@@ -77,6 +77,7 @@ assert_file_exists "services/whoami.sh"
 assert_file_exists "services/gogcli.sh"
 assert_file_exists "services/mkdocs.sh"
 assert_file_exists "services/kuma.sh"
+assert_file_exists "services/users.sh"
 
 # Scripts
 assert_file_exists "scripts/vpn-client.sh"
@@ -91,6 +92,7 @@ for script in apply.sh \
               core/05-traefik.sh core/06-harden.sh \
               services/gitea.sh services/n8n.sh services/whoami.sh \
               services/gogcli.sh services/mkdocs.sh services/kuma.sh \
+              services/users.sh \
               scripts/vpn-client.sh; do
   assert_executable "$script"
 done
@@ -150,6 +152,7 @@ assert "variables.tf: has enable_gitea" grep -q 'enable_gitea' "${ROOT_DIR}/vari
 assert "variables.tf: has enable_gogcli" grep -q 'enable_gogcli' "${ROOT_DIR}/variables.tf"
 assert "variables.tf: has enable_mkdocs" grep -q 'enable_mkdocs' "${ROOT_DIR}/variables.tf"
 assert "variables.tf: has enable_kuma" grep -q 'enable_kuma' "${ROOT_DIR}/variables.tf"
+assert "variables.tf: has additional_users" grep -q 'additional_users' "${ROOT_DIR}/variables.tf"
 assert "variables.tf: has acme_json_path" grep -q 'acme_json_path' "${ROOT_DIR}/variables.tf"
 assert "main.tf: uses null_resource" grep -q 'null_resource' "${ROOT_DIR}/main.tf"
 assert "main.tf: syncs vpn_clients" grep -q 'vpn-client.sh sync' "${ROOT_DIR}/main.tf"

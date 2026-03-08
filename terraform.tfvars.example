@@ -91,6 +91,39 @@ enable_kuma = false
 vpn_clients = ["admin", "laptop", "phone"]
 
 # ═══════════════════════════════════════════════════════════════════════════
+# OPTIONAL - Additional Restricted Users
+# ═══════════════════════════════════════════════════════════════════════════
+# Users with limited access. Groups:
+#   - vpn-cli: SSH access to CLI wrappers (gog, n8n, tea, psql-*)
+#   - vpn-web: WireGuard VPN peer for web UI access via Traefik
+#
+# SSH keys are auto-generated if not provided.
+# Use 'terraform output -json additional_users' to retrieve credentials.
+
+# additional_users = [
+#   # Full access user (CLI + Web)
+#   {
+#     username   = "developer"
+#     ssh_pubkey = ""  # Auto-generate
+#     groups     = ["vpn-cli", "vpn-web"]
+#   },
+#   
+#   # CLI-only user (can use gog, tea, psql-* via SSH)
+#   {
+#     username   = "automation"
+#     ssh_pubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5... automation@ci"
+#     groups     = ["vpn-cli"]
+#   },
+#   
+#   # Web-only user (WireGuard VPN for browser access)
+#   {
+#     username   = "viewer"
+#     ssh_pubkey = ""
+#     groups     = ["vpn-web"]
+#   }
+# ]
+
+# ═══════════════════════════════════════════════════════════════════════════
 # OPTIONAL - Advanced
 # ═══════════════════════════════════════════════════════════════════════════
 

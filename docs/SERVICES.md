@@ -558,6 +558,141 @@ The following monitors are auto-provisioned on first install. You can add more m
 
 ---
 
+## Additional Restricted Users
+
+Create restricted users with limited access to CLI tools and/or web services.
+
+### Architecture
+
+```
+  ┌─────────────────────────────────────────────────────────────────┐
+  │                    Additional Users System                      │
+  ├─────────────────────────────────────────────────────────────────┤
+  │                                                                 │
+  │  ┌─────────────┐         ┌─────────────┐                       │
+  │  │  vpn-cli    │         │  vpn-web    │   System Groups       │
+  │  │  Group      │         │  Group      │                       │
+  │  └──────┬──────┘         └──────┬──────┘                       │
+  │         │                       │                               │
+  │         ▼                       ▼                               │
+  │  ┌─────────────┐         ┌─────────────┐                       │
+  │  │ SSH + rbash │         │ WireGuard   │   Access Method       │
+  │  │ CLI wrappers│         │ VPN Peer    │                       │
+  │  └──────┬──────┘         └──────┬──────┘                       │
+  │         │                       │                               │
+  │         ▼                       ▼                               │
+  │  ┌─────────────────────────────────────────┐                   │
+  │  │           Docker Containers              │                   │
+  │  │  gog, n8n, tea, psql-gitea, psql-n8n    │                   │
+  │  └─────────────────────────────────────────┘                   │
+  └─────────────────────────────────────────────────────────────────┘
+```
+
+### Configuration
+
+```hcl
+additional_users = [
+  # Full access user (CLI + Web)
+  {
+    username   = "developer"
+    ssh_pubkey = ""  # Auto-generate
+    groups     = ["vpn-cli", "vpn-web"]
+  },
+  
+  # CLI-only user
+  {
+    username   = "automation"
+    ssh_pubkey = "ssh-ed25519 AAAAC3... automation@ci"
+    groups     = ["vpn-cli"]
+  },
+  
+  # Web-only user
+  {
+    username   = "viewer"
+    ssh_pubkey = ""
+    groups     = ["vpn-web"]
+  }
+]
+```
+
+### Groups
+
+| Group | Access | Use Case |
+|-------|--------|----------|
+| `vpn-cli` | SSH with restricted shell, CLI wrappers | Automation, API access, DB queries |
+| `vpn-web` | WireGuard VPN peer, Traefik web access | Browser access to web UIs |
+
+### Available CLI Commands (vpn-cli)
+
+| Command | Service Required | Description |
+|---------|------------------|-------------|
+| `gog` | `enable_gogcli = true` | GOG Galaxy CLI |
+| `n8n` | `enable_n8n = true` | n8n workflow CLI |
+| `tea` | `enable_gitea = true` | Gitea CLI (tea) |
+| `psql-gitea` | `enable_gitea = true` | PostgreSQL (Gitea) |
+| `psql-n8n` | `enable_n8n = true` | PostgreSQL (n8n) |
+
+### Security Features
+
+- **Restricted shell (rbash):** Users cannot change PATH or run arbitrary commands
+- **Command whitelist:** Only allowed commands linked to `~/bin`
+- **No sudo access:** Users cannot escalate privileges
+- **Group-based access:** CLI wrappers verify group membership
+- **Separate WireGuard subnet:** User peers use `10.100.1.x` (admin: `10.100.0.x`)
+- **Auto-generated keys:** SSH and WireGuard keys generated if not provided
+
+### Retrieving Credentials
+
+```bash
+# All user credentials
+terraform output -json additional_users | jq
+
+# Specific user's SSH private key
+terraform output -json additional_users | jq -r '.developer.ssh.private_key'
+
+# User's WireGuard config
+ssh mario@10.100.0.1 'sudo cat /etc/wireguard/users/developer/client.conf'
+
+# User's WireGuard QR code
+ssh mario@10.100.0.1 'sudo cat /etc/wireguard/users/developer/qr.txt'
+```
+
+### Usage Examples
+
+```bash
+# vpn-cli user: Connect via SSH and run commands
+ssh developer@10.100.0.1 gog download 123456
+ssh developer@10.100.0.1 tea repos list
+ssh developer@10.100.0.1 psql-gitea "SELECT COUNT(*) FROM users;"
+
+# vpn-web user: Import WireGuard config, then access web UIs in browser
+# https://git.YOUR_DOMAIN, https://n8n.YOUR_DOMAIN, etc.
+```
+
+### Changing User Groups
+
+```hcl
+# Before: vpn-cli + vpn-web
+additional_users = [{
+  username = "developer"
+  groups   = ["vpn-cli", "vpn-web"]
+}]
+
+# After: vpn-cli only (removes WireGuard peer)
+additional_users = [{
+  username = "developer"
+  groups   = ["vpn-cli"]
+}]
+```
+
+```bash
+terraform apply
+# → WireGuard peer automatically removed
+# → User can still use CLI but not web UIs
+```
+
+---
+
 ## Adding Services
 
 Custom services should follow the patterns documented in `docs/ARCHITECTURE.md`.
@@ -576,6 +711,56 @@ Custom services should follow the patterns documented in `docs/ARCHITECTURE.md`.
 > **Important:** Use `file_matches` + `install_content` for idempotent file writes.
 > Traefik uses **file provider** — patch `dynamic.yml` via embedded Python3, NOT Docker labels.
 > See `docs/ARCHITECTURE.md` for the complete template and examples.
+
+### Adding CLI Access for vpn-cli Users
+
+When adding a new service that should be accessible from restricted users via SSH, follow this pattern:
+
+**1. Add the CLI wrapper to `bootstrap/services/users.sh`:**
+
+Find the `install_cli_wrappers()` function and add a new wrapper:
+
+```bash
+# In install_cli_wrappers() function:
+if [[ "$ENABLE_MYSERVICE" == "true" ]]; then
+    install_content /usr/local/bin/myservice-cli 0755 << 'EOF'
+#!/bin/bash
+# MyService CLI wrapper — requires vpn-cli group
+set -euo pipefail
+if ! groups 2>/dev/null | grep -qw vpn-cli; then
+    echo "Error: vpn-cli group membership required" >&2
+    exit 1
+fi
+exec docker exec -i myservice-container myservice-cmd "$@"
+EOF
+fi
+```
+
+**2. Add the symlink in `setup_user_commands()`:**
+
+```bash
+# In setup_user_commands() function, add to the ENABLE_MYSERVICE block:
+ln -sf /usr/local/bin/myservice-cli "$user_bin/myservice"
+```
+
+**3. Update outputs.tf services block:**
+
+```hcl
+services = {
+  # ... existing services ...
+  myservice_cli = var.enable_myservice ? "ssh user@10.100.0.1 myservice <command>" : null
+}
+```
+
+**4. Document the command in SERVICES.md:**
+
+Add a row to the "Available CLI Commands (vpn-cli)" table.
+
+**Key requirements:**
+- Wrapper MUST check `groups | grep -qw vpn-cli` before executing
+- Use `docker exec -i` (not `-it`) for non-TTY SSH commands
+- Container must be on `vpn_net` network
+- Add to both `/usr/local/bin` (wrapper) and user's `~/bin` (symlink)
 
 ---
 

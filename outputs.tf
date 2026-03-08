@@ -74,6 +74,47 @@ output "credentials" {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
+# ADDITIONAL USERS - Restricted user credentials
+# ═══════════════════════════════════════════════════════════════════════════
+
+output "additional_users" {
+  description = "Additional restricted user credentials (vpn-cli/vpn-web)"
+  sensitive   = true
+  value = {
+    for user in var.additional_users : user.username => {
+      groups = user.groups
+
+      ssh = {
+        public_key  = user.ssh_pubkey != "" ? user.ssh_pubkey : tls_private_key.user_ssh[user.username].public_key_openssh
+        private_key = user.ssh_pubkey != "" ? "(user-provided)" : tls_private_key.user_ssh[user.username].private_key_openssh
+        connect     = contains(user.groups, "vpn-cli") ? "ssh ${user.username}@${local.vpn_server_ip}" : null
+      }
+
+      wireguard = contains(user.groups, "vpn-web") ? {
+        config_cmd = "ssh ${var.admin_user}@${local.vpn_server_ip} 'sudo cat /etc/wireguard/users/${user.username}/client.conf'"
+        qr_cmd     = "ssh ${var.admin_user}@${local.vpn_server_ip} 'sudo cat /etc/wireguard/users/${user.username}/qr.txt'"
+        note       = "WireGuard config generated on server in /etc/wireguard/users/${user.username}/"
+      } : null
+
+      cli_commands = contains(user.groups, "vpn-cli") ? compact([
+        var.enable_gogcli ? "gog" : "",
+        var.enable_n8n ? "n8n" : "",
+        var.enable_gitea ? "psql-gitea" : "",
+        var.enable_n8n ? "psql-n8n" : "",
+        var.enable_gitea ? "tea" : "",
+      ]) : []
+
+      web_services = contains(user.groups, "vpn-web") ? compact([
+        var.enable_gitea ? "https://git.${var.domain}" : "",
+        var.enable_n8n ? "https://n8n.${var.domain}" : "",
+        var.enable_mkdocs ? "https://docs.${var.domain}" : "",
+        var.enable_kuma ? "https://status.${var.domain}" : "",
+      ]) : []
+    }
+  }
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SERVICES - URLs of installed services
 # ═══════════════════════════════════════════════════════════════════════════
 
