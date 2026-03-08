@@ -241,7 +241,7 @@ ssh admin@10.100.0.1
 
 # 3. Mit Google authentifizieren (einmalig)
 #gog auth add your-email@gmail.com --services user --manual
-docker exec -it gogcli gog auth add bee.mario@gmail.com --services user --manual
+docker exec -it gogcli gog auth add email@gmail.com --services user --manual
 
 # URL öffnen → Authorisieren → Code zurück einfügen
 ```
