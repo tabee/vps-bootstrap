@@ -408,6 +408,109 @@ create_owner_user() {
   fi
 }
 
+# ── Create OpenAI credential via API ─────────────────────────────────────────
+create_openai_credential() {
+  log_step "Ensuring OpenAI credential exists in n8n"
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    log_info "Would create OpenAI credential via n8n API"
+    return 0
+  fi
+
+  # Skip if no API key configured
+  if [[ -z "$OPENAI_API_KEY" || "$OPENAI_API_KEY" == "__OPENAI_API_KEY__" ]]; then
+    log_info "No OpenAI API key configured — skipping credential creation"
+    return 0
+  fi
+
+  if [[ -z "$N8N_ADMIN_EMAIL" || "$N8N_ADMIN_EMAIL" == "admin@example.com" ]]; then
+    log_warn "N8N_ADMIN_EMAIL not set — cannot create credentials"
+    return 0
+  fi
+
+  if [[ -z "$N8N_ADMIN_PASSWORD" || "$N8N_ADMIN_PASSWORD" == "__N8N_ADMIN_PASSWORD__" ]]; then
+    log_warn "N8N_ADMIN_PASSWORD not set — cannot create credentials"
+    return 0
+  fi
+
+  local n8n_url="http://10.20.0.40:5678"
+  
+  # Wait for n8n API to be ready
+  log_info "Waiting for n8n API..."
+  local i=0
+  while [[ $i -lt 30 ]]; do
+    if curl -sf "${n8n_url}/healthz" >/dev/null 2>&1; then
+      break
+    fi
+    sleep 2
+    i=$((i + 2))
+  done
+
+  # Use Python for proper cookie handling and credential creation
+  N8N_URL="$n8n_url" \
+  N8N_EMAIL="$N8N_ADMIN_EMAIL" \
+  N8N_PASS="$N8N_ADMIN_PASSWORD" \
+  OPENAI_KEY="$OPENAI_API_KEY" \
+  python3 - <<'PY' || { log_warn "Failed to create OpenAI credential"; return 0; }
+import urllib.request
+import json
+import os
+import sys
+
+N8N_URL = os.environ["N8N_URL"]
+N8N_EMAIL = os.environ["N8N_EMAIL"]
+N8N_PASS = os.environ["N8N_PASS"]
+OPENAI_KEY = os.environ["OPENAI_KEY"]
+CRED_NAME = "OpenAI API"
+
+try:
+    # Login to n8n
+    login_data = json.dumps({"emailOrLdapLoginId": N8N_EMAIL, "password": N8N_PASS}).encode()
+    req = urllib.request.Request(f"{N8N_URL}/rest/login", data=login_data, headers={"Content-Type": "application/json"})
+    resp = urllib.request.urlopen(req, timeout=30)
+    cookie = resp.headers.get("Set-Cookie", "").split(";")[0]
+    
+    if not cookie:
+        print("ERROR: No auth cookie received", file=sys.stderr)
+        sys.exit(1)
+
+    # Check if openAiApi credential already exists
+    req = urllib.request.Request(f"{N8N_URL}/rest/credentials", headers={"Cookie": cookie})
+    resp = urllib.request.urlopen(req, timeout=30)
+    creds = json.loads(resp.read())
+    
+    existing = [c for c in creds.get("data", []) if c["type"] == "openAiApi"]
+    if existing:
+        cred_name = existing[0]["name"]
+        print(f"SKIP: OpenAI credential already exists: {cred_name}")
+        sys.exit(0)
+    
+    # Create credential
+    cred_data = json.dumps({
+        "name": CRED_NAME,
+        "type": "openAiApi",
+        "data": {"apiKey": OPENAI_KEY}
+    }).encode()
+    
+    req = urllib.request.Request(f"{N8N_URL}/rest/credentials", 
+        data=cred_data,
+        headers={"Cookie": cookie, "Content-Type": "application/json"})
+    resp = urllib.request.urlopen(req, timeout=30)
+    result = json.loads(resp.read())
+    cred_id = result["data"]["id"]
+    print(f"OK: Created OpenAI credential: {cred_id}")
+
+except urllib.error.HTTPError as e:
+    print(f"ERROR: HTTP {e.code}: {e.read().decode()[:200]}", file=sys.stderr)
+    sys.exit(1)
+except Exception as e:
+    print(f"ERROR: {e}", file=sys.stderr)
+    sys.exit(1)
+PY
+
+  log_info "✅ OpenAI credential configured in n8n"
+}
+
 # ── Main ─────────────────────────────────────────────────────────────────────
 main() {
   module_start "$BOOTSTRAP_MODULE"
@@ -419,6 +522,7 @@ main() {
   patch_traefik_routes
   deploy_n8n
   create_owner_user
+  create_openai_credential
 
   module_done
 }
