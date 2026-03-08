@@ -49,6 +49,8 @@ enable_gitea = false
 # Workflow automation (n8n.example.com)
 enable_n8n = false
 n8n_openai_api_key = ""
+# n8n_admin_email    = "admin@example.com"  # Owner email (required for login)
+# n8n_admin_password = ""                   # Auto-generated if empty
 
 # Test service (whoami.example.com)
 enable_whoami = true

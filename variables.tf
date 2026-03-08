@@ -147,6 +147,19 @@ variable "n8n_openai_api_key" {
   sensitive   = true
 }
 
+variable "n8n_admin_email" {
+  description = "Email for n8n owner/admin user"
+  type        = string
+  default     = ""
+}
+
+variable "n8n_admin_password" {
+  description = "Password for n8n owner/admin user (auto-generated if empty)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 variable "enable_whoami" {
   description = "Install test service? (whoami.domain.com)"
   type        = bool

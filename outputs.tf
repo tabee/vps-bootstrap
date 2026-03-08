@@ -44,6 +44,8 @@ output "credentials" {
 
     n8n = var.enable_n8n ? {
       url            = "https://n8n.${var.domain}"
+      admin_email    = var.n8n_admin_email
+      admin_password = var.n8n_admin_password != "" ? var.n8n_admin_password : random_password.n8n_admin_password[0].result
       db_password    = random_password.n8n_db[0].result
       encryption_key = random_password.n8n_encryption[0].result
     } : null

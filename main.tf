@@ -67,6 +67,12 @@ resource "random_password" "n8n_encryption" {
   special = false
 }
 
+resource "random_password" "n8n_admin_password" {
+  count   = var.enable_n8n && var.n8n_admin_password == "" ? 1 : 0
+  length  = 24
+  special = true
+}
+
 resource "random_password" "mkdocs_webhook_secret" {
   count   = var.enable_mkdocs && var.mkdocs_webhook_secret == "" ? 1 : 0
   length  = 32
@@ -117,6 +123,8 @@ GITEA_ADMIN_PASSWORD="${var.gitea_admin_password != "" ? var.gitea_admin_passwor
 %{if var.enable_n8n~}
 N8N_DB_PASSWORD="${random_password.n8n_db[0].result}"
 N8N_ENCRYPTION_KEY="${random_password.n8n_encryption[0].result}"
+N8N_ADMIN_EMAIL="${var.n8n_admin_email}"
+N8N_ADMIN_PASSWORD="${var.n8n_admin_password != "" ? var.n8n_admin_password : random_password.n8n_admin_password[0].result}"
 OPENAI_API_KEY="${var.n8n_openai_api_key}"
 %{endif~}
 %{if var.enable_gogcli~}
