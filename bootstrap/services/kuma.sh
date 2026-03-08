@@ -89,6 +89,7 @@ services:
     security_opt:
       - no-new-privileges:true
     cap_drop: ["ALL"]
+    cap_add: ["CHOWN", "SETUID", "SETGID"]
     volumes:
       - ./data:/app/data
       # Docker socket for container monitoring (optional, read-only)
