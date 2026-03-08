@@ -174,7 +174,7 @@ resource "null_resource" "clone_repo" {
     inline = [
       "set -e",
       "sudo apt-get update -qq && sudo apt-get install -y -qq git",
-      "if [ -d ${var.repo_path}/.git ]; then sudo git -C ${var.repo_path} fetch origin && sudo git -C ${var.repo_path} checkout ${var.git_ref} && sudo git -C ${var.repo_path} pull origin ${var.git_ref}; else sudo rm -rf ${var.repo_path} && sudo git clone --branch ${var.git_ref} ${var.git_repo_url} ${var.repo_path}; fi",
+      "if [ -d ${var.repo_path}/.git ]; then sudo git -C ${var.repo_path} fetch origin && sudo git -C ${var.repo_path} reset --hard origin/${var.git_ref}; else sudo rm -rf ${var.repo_path} && sudo git clone --branch ${var.git_ref} ${var.git_repo_url} ${var.repo_path}; fi",
     ]
   }
 }
