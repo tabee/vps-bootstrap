@@ -421,12 +421,14 @@ After setup, add these monitors for internal services:
 
 | Service | Type | URL / Host | Expected |
 |---------|------|------------|----------|
-| Traefik | HTTP | `http://10.20.0.10:8080/ping` | 200 OK |
+| Traefik (via whoami) | HTTP | `http://10.20.0.20:80/` | 200 OK |
 | Gitea | HTTP | `http://10.20.0.30:3000/api/healthz` | 200 OK |
 | n8n | HTTP | `http://10.20.0.40:5678/healthz` | 200 OK |
 | MkDocs | HTTP | `http://10.20.0.60:8080/` | 200 OK |
 | PostgreSQL (Gitea) | TCP | `10.20.0.31:5432` | Connection OK |
 | PostgreSQL (n8n) | TCP | `10.20.0.41:5432` | Connection OK |
+
+> **Note:** Traefik has no internal ping endpoint. Monitor `whoami` as a proxy — if whoami responds, Traefik is healthy.
 
 ### Container Details
 

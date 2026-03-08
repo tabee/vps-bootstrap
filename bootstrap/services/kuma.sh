@@ -259,7 +259,7 @@ print_instructions() {
   log_info "  Data:      ${KUMA_DIR}/data/"
   log_info ""
   log_info "  Recommended monitors for internal services:"
-  log_info "    • Traefik:   http://10.20.0.10:8080/ping"
+  log_info "    • Traefik (via whoami): http://10.20.0.20:80/"
   log_info "    • Gitea:     http://10.20.0.30:3000/api/healthz"
   log_info "    • n8n:       http://10.20.0.40:5678/healthz"
   log_info "    • MkDocs:    http://10.20.0.60:8080/"
