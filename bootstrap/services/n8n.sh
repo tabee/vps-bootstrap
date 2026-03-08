@@ -128,11 +128,8 @@ services:
       - DB_POSTGRESDB_DATABASE=${POSTGRES_DB}
       - DB_POSTGRESDB_USER=${POSTGRES_USER}
       - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
-      # n8n security & owner user setup
+      # n8n security (owner user created via REST API after deployment)
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
-      # Create owner user on first startup if no users exist
-      - N8N_DEFAULT_USER_EMAIL=${N8N_ADMIN_EMAIL}
-      - N8N_DEFAULT_USER_PASSWORD=${N8N_ADMIN_PASSWORD}
       # URL / Webhooks (Traefik terminates TLS)
       - N8N_HOST=n8n.${VPN_DOMAIN}
       - N8N_PROTOCOL=https
@@ -350,6 +347,67 @@ deploy_n8n() {
   log_warn "n8n may not be fully started yet"
 }
 
+# ── Create owner user via API ───────────────────────────────────────────────
+create_owner_user() {
+  log_step "Ensuring n8n owner user exists"
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    log_info "Would create owner user via n8n API"
+    return 0
+  fi
+
+  if [[ -z "$N8N_ADMIN_EMAIL" || "$N8N_ADMIN_EMAIL" == "admin@example.com" ]]; then
+    log_warn "N8N_ADMIN_EMAIL not properly set — skipping owner creation"
+    return 0
+  fi
+
+  if [[ -z "$N8N_ADMIN_PASSWORD" || "$N8N_ADMIN_PASSWORD" == "__N8N_ADMIN_PASSWORD__" ]]; then
+    log_warn "N8N_ADMIN_PASSWORD not set — skipping owner creation"
+    return 0
+  fi
+
+  local n8n_url="http://10.20.0.40:5678"
+  
+  # Wait for n8n API to be ready
+  log_info "Waiting for n8n API..."
+  local i=0
+  while [[ $i -lt 30 ]]; do
+    if curl -sf "${n8n_url}/healthz" >/dev/null 2>&1; then
+      break
+    fi
+    sleep 2
+    i=$((i + 2))
+  done
+
+  # Check if owner already exists by trying to fetch users (will fail if no owner)
+  # The /rest/owner/setup endpoint returns 400 if owner already exists
+  local response
+  response=$(curl -sS -w "\n%{http_code}" -X POST "${n8n_url}/rest/owner/setup" \
+    -H "Content-Type: application/json" \
+    -d "{
+      \"email\": \"${N8N_ADMIN_EMAIL}\",
+      \"firstName\": \"Admin\",
+      \"lastName\": \"User\",
+      \"password\": \"${N8N_ADMIN_PASSWORD}\"
+    }" 2>&1) || true
+
+  local http_code
+  http_code=$(echo "$response" | tail -1)
+  local body
+  body=$(echo "$response" | sed '$d')
+
+  if [[ "$http_code" == "200" ]]; then
+    log_info "✅ Created owner user: ${N8N_ADMIN_EMAIL}"
+  elif [[ "$http_code" == "400" ]] && echo "$body" | grep -qi "already"; then
+    log_info "Owner user already exists"
+  elif [[ "$http_code" == "400" ]]; then
+    # Owner likely already set up
+    log_info "Owner user already configured"
+  else
+    log_warn "Unexpected response from n8n setup API (HTTP ${http_code}): ${body}"
+  fi
+}
+
 # ── Main ─────────────────────────────────────────────────────────────────────
 main() {
   module_start "$BOOTSTRAP_MODULE"
@@ -360,6 +418,7 @@ main() {
   install_env_file
   patch_traefik_routes
   deploy_n8n
+  create_owner_user
 
   module_done
 }
