@@ -36,6 +36,16 @@ letsencrypt_staging              = false
 letsencrypt_require_whoami_check = true
 letsencrypt_renew_before_days    = 30
 
+# ACME Certificate Authority (alternative to Let's Encrypt)
+# Options: "letsencrypt" (default), "zerossl", "buypass"
+# Use "zerossl" or "buypass" if Let's Encrypt rate limits are exhausted
+acme_ca = "letsencrypt"
+
+# ZeroSSL EAB credentials (required only when acme_ca = "zerossl")
+# Get from: https://app.zerossl.com/developer → EAB Credentials
+# zerossl_eab_kid      = "your-kid-here"
+# zerossl_eab_hmac_key = "your-hmac-key-here"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # OPTIONAL - Services
 # ═══════════════════════════════════════════════════════════════════════════
