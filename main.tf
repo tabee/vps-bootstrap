@@ -140,6 +140,10 @@ MKDOCS_WEBHOOK_SECRET="${var.mkdocs_webhook_secret != "" ? var.mkdocs_webhook_se
 VPN_CLIENTS="${join(",", var.vpn_clients)}"
 EOT
 
+  # ACME JSON: seed server with existing Let's Encrypt certificate if available
+  has_acme_json     = var.acme_json_path != "" && fileexists(var.acme_json_path)
+  acme_json_content = local.has_acme_json ? file(var.acme_json_path) : ""
+
   # Always skip hardening in apply.sh - Terraform runs it after VPN clients exist.
   # When connected over VPN, also skip WireGuard module to avoid SSH drop during network reconfiguration.
   bootstrap_command = var.use_vpn ? "sudo bash ${var.repo_path}/bootstrap/apply.sh --skip-harden --skip-wireguard" : "sudo bash ${var.repo_path}/bootstrap/apply.sh --skip-harden"
@@ -215,11 +219,48 @@ resource "null_resource" "deploy_env" {
 }
 
 # =============================================================================
+# Deploy ACME Certificate (optional - seed existing Let's Encrypt cert)
+# =============================================================================
+
+resource "null_resource" "deploy_acme_json" {
+  count      = local.has_acme_json ? 1 : 0
+  depends_on = [null_resource.clone_repo]
+
+  triggers = {
+    acme_hash = sha256(local.acme_json_content)
+    clone_id  = null_resource.clone_repo.id
+  }
+
+  connection {
+    type        = "ssh"
+    host        = local.effective_ssh_host
+    user        = local.effective_ssh_user
+    port        = var.ssh_port
+    agent       = local.use_ssh_agent
+    private_key = local.ssh_private_key
+  }
+
+  provisioner "file" {
+    content     = local.acme_json_content
+    destination = "/tmp/acme.json"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "sudo mkdir -p /opt/traefik/letsencrypt",
+      "sudo mv /tmp/acme.json /opt/traefik/letsencrypt/acme.json",
+      "sudo chown 65532:65532 /opt/traefik/letsencrypt/acme.json",
+      "sudo chmod 600 /opt/traefik/letsencrypt/acme.json",
+    ]
+  }
+}
+
+# =============================================================================
 # Run Bootstrap
 # =============================================================================
 
 resource "null_resource" "bootstrap" {
-  depends_on = [null_resource.deploy_env]
+  depends_on = [null_resource.deploy_env, null_resource.deploy_acme_json]
 
   triggers = {
     env_hash   = sha256(local.env_content)

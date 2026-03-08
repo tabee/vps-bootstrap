@@ -36,6 +36,11 @@ letsencrypt_staging              = false
 letsencrypt_require_whoami_check = true
 letsencrypt_renew_before_days    = 30
 
+# Path to existing acme.json from Let's Encrypt (optional)
+# If set and file exists, Terraform uploads it to the server so Traefik
+# reuses the certificate instead of requesting a new one.
+# acme_json_path = "acme.json"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # OPTIONAL - Services
 # ═══════════════════════════════════════════════════════════════════════════

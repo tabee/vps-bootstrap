@@ -148,6 +148,7 @@ assert "variables.tf: has vpn_clients" grep -q 'vpn_clients' "${ROOT_DIR}/variab
 assert "variables.tf: has enable_gitea" grep -q 'enable_gitea' "${ROOT_DIR}/variables.tf"
 assert "variables.tf: has enable_gogcli" grep -q 'enable_gogcli' "${ROOT_DIR}/variables.tf"
 assert "variables.tf: has enable_mkdocs" grep -q 'enable_mkdocs' "${ROOT_DIR}/variables.tf"
+assert "variables.tf: has acme_json_path" grep -q 'acme_json_path' "${ROOT_DIR}/variables.tf"
 assert "main.tf: uses null_resource" grep -q 'null_resource' "${ROOT_DIR}/main.tf"
 assert "main.tf: syncs vpn_clients" grep -q 'vpn-client.sh sync' "${ROOT_DIR}/main.tf"
 assert "outputs.tf: has credentials output" grep -q 'credentials' "${ROOT_DIR}/outputs.tf"

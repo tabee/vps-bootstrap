@@ -84,6 +84,12 @@ variable "letsencrypt_renew_before_days" {
   }
 }
 
+variable "acme_json_path" {
+  description = "Path to existing acme.json from Let's Encrypt (uploaded to server if set and file exists, otherwise cert is generated fresh)"
+  type        = string
+  default     = ""
+}
+
 # ═══════════════════════════════════════════════════════════════════════════
 # SSH OPTIONS
 # ═══════════════════════════════════════════════════════════════════════════
