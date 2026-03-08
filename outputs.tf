@@ -43,7 +43,7 @@ output "credentials" {
     } : null
 
     n8n = var.enable_n8n ? {
-      url            = "https://n8n.${var.domain}"
+      url            = "https://8n8.${var.domain}"
       db_password    = random_password.n8n_db[0].result
       encryption_key = random_password.n8n_encryption[0].result
     } : null
@@ -70,7 +70,7 @@ output "services" {
   description = "Installed services (only accessible via VPN)"
   value = {
     gitea  = var.enable_gitea ? "https://git.${var.domain}" : null
-    n8n    = var.enable_n8n ? "https://n8n.${var.domain}" : null
+    n8n    = var.enable_n8n ? "https://8n8.${var.domain}" : null
     whoami = var.enable_whoami ? "https://whoami.${var.domain}" : null
     gogcli = var.enable_gogcli ? "ssh ${var.admin_user}@${local.vpn_server_ip} 'gog <command>'" : null
     mkdocs = var.enable_mkdocs ? "https://docs.${var.domain}" : null

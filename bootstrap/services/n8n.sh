@@ -297,6 +297,12 @@ PY
   chmod 0644 "$TRAEFIK_DYNAMIC"
 
   log_info "✅ Added Traefik router+service for 8n8.${VPN_DOMAIN}"
+  
+  # Reload Traefik to pick up new routes (bind-mount doesn't always trigger inotify)
+  if docker ps --filter "name=^/traefik$" --format '{{.Names}}' | grep -q '^traefik$'; then
+    log_info "Restarting Traefik to apply new routes..."
+    (cd /opt/traefik && docker compose restart traefik) || log_warn "Failed to restart Traefik"
+  fi
 }
 
 # ── Deploy n8n stack ────────────────────────────────────────────────────────
