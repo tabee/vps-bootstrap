@@ -9,7 +9,7 @@
 #   - n8n (latest) at 10.20.0.40
 #
 # Access model:
-#   VPN → Traefik:443 → 8n8.<domain> → n8n:5678 (HTTP)
+#   VPN → Traefik:443 → n8n.<domain> → n8n:5678 (HTTP)
 #
 # Security design:
 #   - NO published ports (no `ports:` directive)
@@ -134,9 +134,9 @@ services:
       - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD}
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
       # URL / Webhooks (Traefik terminates TLS)
-      - N8N_HOST=8n8.${VPN_DOMAIN}
+      - N8N_HOST=n8n.${VPN_DOMAIN}
       - N8N_PROTOCOL=https
-      - WEBHOOK_URL=https://8n8.${VPN_DOMAIN}/
+      - WEBHOOK_URL=https://n8n.${VPN_DOMAIN}/
       # Timezone
       - GENERIC_TIMEZONE=Europe/Zurich
       - TZ=Europe/Zurich
@@ -214,7 +214,7 @@ EOF
 
 # ── Patch Traefik dynamic.yml ───────────────────────────────────────────────
 patch_traefik_routes() {
-  log_step "Ensuring Traefik route exists for 8n8.${VPN_DOMAIN}"
+  log_step "Ensuring Traefik route exists for n8n.${VPN_DOMAIN}"
 
   if [[ "$DRY_RUN" == "true" ]]; then
     log_info "Would patch ${TRAEFIK_DYNAMIC}"
@@ -226,15 +226,15 @@ patch_traefik_routes() {
   fi
 
   # Idempotency: do nothing if router already exists
-  if grep -qE '^\s*8n8:\s*$' "$TRAEFIK_DYNAMIC"; then
-    log_info "Traefik router '8n8' already present"
+  if grep -qE '^\s*n8n:\s*$' "$TRAEFIK_DYNAMIC"; then
+    log_info "Traefik router 'n8n' already present"
     return 0
   fi
 
   # Patch file content deterministically (Traefik uses file provider).
   # We insert:
-  #   - router `8n8` under http.routers
-  #   - service `8n8-svc` under http.services
+  #   - router `n8n` under http.routers
+  #   - service `n8n-svc` under http.services
   # right next to the existing git-web entries.
 
   # IMPORTANT: This heredoc is single-quoted so bash does NOT interpret backticks
@@ -255,23 +255,23 @@ text = p.read_text(encoding="utf-8")
 router_snip = f"""
 
     # n8n web UI
-    8n8:
+    n8n:
       entryPoints: [\"websecure\"]
-      rule: \"Host(`8n8.{vpn_domain}`)\"
+      rule: \"Host(`n8n.{vpn_domain}`)\"
       middlewares: [\"vpn-only\"]
-      service: 8n8-svc
+      service: n8n-svc
 {tls_block}
 """
 
 service_snip = """
 
-    8n8-svc:
+    n8n-svc:
       loadBalancer:
         servers:
           - url: \"http://10.20.0.40:5678\"
 """
 
-if "\n    8n8:\n" in text or "\n    8n8-svc:\n" in text:
+if "\n    n8n:\n" in text or "\n    n8n-svc:\n" in text:
     # Already patched (or partially patched). Keep idempotent.
     p.write_text(text, encoding="utf-8")
     raise SystemExit(0)
@@ -296,7 +296,7 @@ PY
 
   chmod 0644 "$TRAEFIK_DYNAMIC"
 
-  log_info "✅ Added Traefik router+service for 8n8.${VPN_DOMAIN}"
+  log_info "✅ Added Traefik router+service for n8n.${VPN_DOMAIN}"
   
   # Reload Traefik to pick up new routes (bind-mount doesn't always trigger inotify)
   if docker ps --filter "name=^/traefik$" --format '{{.Names}}' | grep -q '^traefik$'; then

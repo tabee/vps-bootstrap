@@ -319,7 +319,7 @@ install_dynamic_config() {
     default_tls_store="$(cat <<YAML
 # ── TLS: wildcard certificate ────────────────────────────────────────────────
 # Request a single *.${VPN_DOMAIN} wildcard cert via DNS-01 (Hetzner).
-# This covers ALL subdomains (git, whoami, 8n8, ...) with one cert.
+# This covers ALL subdomains (git, whoami, n8n, ...) with one cert.
 tls:
   stores:
     default:

@@ -808,7 +808,7 @@ All services run as Docker containers with:
 |---|---|---|
 | whoami | `https://whoami.<domain>` | 10.20.0.20 |
 | Gitea | `https://git.<domain>` | 10.20.0.30 |
-| n8n | `https://8n8.<domain>` | 10.20.0.40 |
+| n8n | `https://n8n.<domain>` | 10.20.0.40 |
 | Docs | `https://docs.<domain>` | 10.20.0.60 |
 
 ## CLI Services (via SSH + docker exec)
@@ -847,7 +847,7 @@ MDEOF
 Workflow automation with PostgreSQL backend.
 
 - **IP:** 10.20.0.40 (n8n), .41 (PostgreSQL)
-- **URL:** `https://8n8.<domain>`
+- **URL:** `https://n8n.<domain>`
 - **Config:** `/opt/n8n/`
 MDEOF
 
