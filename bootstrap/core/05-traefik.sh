@@ -56,9 +56,6 @@ fi
 
 HETZNER_API_TOKEN="${HETZNER_API_TOKEN:-__ACME_DNS_TOKEN__}"
 ACME_EMAIL="${ACME_EMAIL:-admin@example.com}"
-ACME_CA="${ACME_CA:-letsencrypt}"
-ZEROSSL_EAB_KID="${ZEROSSL_EAB_KID:-}"
-ZEROSSL_EAB_HMAC_KEY="${ZEROSSL_EAB_HMAC_KEY:-}"
 VPN_DOMAIN="${VPN_DOMAIN:-example.com}"
 ENABLE_WHOAMI="${ENABLE_WHOAMI:-true}"
 LETSENCRYPT_ENABLED="${LETSENCRYPT_ENABLED:-true}"
@@ -225,59 +222,25 @@ install_traefik_config() {
   local acme_ca_server_block=""
 
   if [[ "$acme_active" == "true" ]]; then
-    local acme_eab_block=""
-
-    # Determine ACME CA server and settings
-    case "$ACME_CA" in
-      zerossl)
-        if [[ -z "$ZEROSSL_EAB_KID" || -z "$ZEROSSL_EAB_HMAC_KEY" ]]; then
-          log_fatal "ZeroSSL requires zerossl_eab_kid and zerossl_eab_hmac_key (get from https://app.zerossl.com/developer)"
-        fi
-        acme_ca_server_block='      caServer: https://acme.zerossl.com/v2/DV90'
-        acme_eab_block="$(cat <<EABYAML
-      eab:
-        kid: ${ZEROSSL_EAB_KID}
-        hmacEncoded: ${ZEROSSL_EAB_HMAC_KEY}
-EABYAML
-)"
-        log_info "Using ZeroSSL as ACME CA"
-        ;;
-      buypass)
-        if is_true "$LETSENCRYPT_STAGING"; then
-          acme_ca_server_block='      caServer: https://api.test4.buypass.no/acme/directory'
-          log_warn "Buypass staging mode enabled (certificates will NOT be browser-trusted)"
-        else
-          acme_ca_server_block='      caServer: https://api.buypass.com/acme/directory'
-          log_info "Using Buypass as ACME CA"
-        fi
-        ;;
-      letsencrypt|*)
-        if is_true "$LETSENCRYPT_STAGING"; then
-          acme_ca_server_block='      caServer: https://acme-staging-v02.api.letsencrypt.org/directory'
-          log_warn "Let's Encrypt staging mode enabled (certificates will NOT be browser-trusted)"
-        else
-          acme_ca_server_block=''
-          log_info "Using Let's Encrypt as ACME CA"
-        fi
-        ;;
-    esac
+    if is_true "$LETSENCRYPT_STAGING"; then
+      acme_ca_server_block='      caServer: https://acme-staging-v02.api.letsencrypt.org/directory'
+      log_warn "Let's Encrypt staging mode enabled (certificates will NOT be browser-trusted)"
+    fi
 
     acme_block="$(cat <<YAML
-# ── ACME Certificate Authority ──────────────────────────────────────────────
+# ── ACME / Let's Encrypt ────────────────────────────────────────────────────
 # DNS-01 challenge via Hetzner DNS API.
 # This allows TLS certificate provisioning WITHOUT exposing any HTTP port
 # to the public internet. The only public port is UDP/51820 (WireGuard).
-# CA: ${ACME_CA}
 certificatesResolvers:
   le:
     acme:
       email: ${ACME_EMAIL}
 ${acme_ca_server_block}
-${acme_eab_block}
       storage: /letsencrypt/acme.json
       dnsChallenge:
         provider: hetzner
-        # Wait 60s after setting TXT record before asking CA to validate.
+        # Wait 60s after setting TXT record before asking Let's Encrypt to validate.
         # Hetzner DNS propagation can take 30-60s — without this delay,
         # secondary validators see stale/wrong TXT records → 403 Unauthorized.
         propagation:

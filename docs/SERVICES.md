@@ -192,37 +192,6 @@ letsencrypt_renew_before_days    = 30
 
 For safe dry-runs against Let's Encrypt itself, set `letsencrypt_staging = true`.
 
-### Alternative ACME Certificate Authorities
-
-If you've hit Let's Encrypt rate limits (5 certificates per week), you can switch to an alternative CA:
-
-| CA | Variable | Rate Limits | Notes |
-|----|----------|-------------|-------|
-| **Let's Encrypt** | `acme_ca = "letsencrypt"` | 5 certs/week/domain | Default |
-| **ZeroSSL** | `acme_ca = "zerossl"` | 3 certs/domain (free tier) | Requires EAB credentials |
-| **Buypass** | `acme_ca = "buypass"` | More generous | 180-day certificates |
-
-**Switching to ZeroSSL:**
-
-1. Create free account at https://app.zerossl.com/
-2. Go to Developer → EAB Credentials → Generate
-3. Add to `terraform.tfvars`:
-
-```hcl
-acme_ca              = "zerossl"
-zerossl_eab_kid      = "your-kid-here"
-zerossl_eab_hmac_key = "your-hmac-key-here"
-```
-
-**Switching to Buypass:**
-
-```hcl
-acme_ca = "buypass"
-```
-
-> **Note:** Buypass issues 180-day certificates (vs 90-day for Let's Encrypt).  
-> Use `letsencrypt_staging = true` with Buypass for their test environment.
-
 ---
 
 ## gogcli
@@ -444,11 +413,8 @@ docker logs traefik 2>&1 | grep SERVICE_NAME
 ### Certificate issues?
 
 ```bash
-# Check ACME certificates (resolver name is 'le')
-cat /opt/traefik/acme.json | jq '.le.Certificates[].domain'
-
-# Check ACME account info
-cat /opt/traefik/acme.json | jq '.le.Account'
+# Check ACME log
+cat /opt/traefik/acme.json | jq '.letsencrypt.Certificates[].domain'
 ```
 
 ### Port conflicts?

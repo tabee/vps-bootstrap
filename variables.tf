@@ -84,30 +84,6 @@ variable "letsencrypt_renew_before_days" {
   }
 }
 
-variable "acme_ca" {
-  description = "ACME Certificate Authority to use: letsencrypt, zerossl, or buypass"
-  type        = string
-  default     = "letsencrypt"
-
-  validation {
-    condition     = contains(["letsencrypt", "zerossl", "buypass"], var.acme_ca)
-    error_message = "acme_ca must be one of: letsencrypt, zerossl, buypass."
-  }
-}
-
-variable "zerossl_eab_kid" {
-  description = "ZeroSSL EAB Key ID (required when acme_ca=zerossl). Get from https://app.zerossl.com/developer"
-  type        = string
-  default     = ""
-}
-
-variable "zerossl_eab_hmac_key" {
-  description = "ZeroSSL EAB HMAC Key (required when acme_ca=zerossl)"
-  type        = string
-  default     = ""
-  sensitive   = true
-}
-
 # ═══════════════════════════════════════════════════════════════════════════
 # SSH OPTIONS
 # ═══════════════════════════════════════════════════════════════════════════
