@@ -163,6 +163,29 @@ Store securely (password manager).
 
 ---
 
+## CLI-Dienste
+
+Nach VPN-Verbindung via SSH erreichbar. **Kein sudo erforderlich.**
+
+| Dienst | Befehl |
+|--------|--------|
+| Gitea CLI | `ssh mario@10.100.0.1 tea <cmd>` |
+| GOG CLI | `ssh mario@10.100.0.1 gog <cmd>` |
+
+**Ersteinrichtung tea:** In Gitea Token erstellen, dann:
+```bash
+ssh mario@10.100.0.1 tea login add --name vps --url https://git.DOMAIN --token TOKEN
+```
+
+**Ersteinrichtung gog:**
+```bash
+ssh -t mario@10.100.0.1 gog login
+```
+
+Details: [docs/SERVICES.md](docs/SERVICES.md)
+
+---
+
 ## Troubleshooting
 
 | Problem | Solution |
