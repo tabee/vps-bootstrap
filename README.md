@@ -169,17 +169,20 @@ Nach VPN-Verbindung via SSH erreichbar. **Kein sudo erforderlich.**
 
 | Dienst | Befehl |
 |--------|--------|
-| Gitea CLI | `ssh mario@10.100.0.1 tea <cmd>` |
-| GOG CLI | `ssh mario@10.100.0.1 gog <cmd>` |
+| Gitea CLI | `ssh user@10.100.0.1 tea <cmd>` |
+| Gitea DB | `ssh user@10.100.0.1 psql-gitea <query>` |
+| n8n CLI | `ssh user@10.100.0.1 n8n <cmd>` |
+| n8n DB | `ssh user@10.100.0.1 psql-n8n <query>` |
+| GOG CLI | `ssh user@10.100.0.1 gog <cmd>` |
 
 **Ersteinrichtung tea:** In Gitea Token erstellen, dann:
 ```bash
-ssh mario@10.100.0.1 tea login add --name vps --url https://git.DOMAIN --token TOKEN
+ssh user@10.100.0.1 tea login add --name vps --url https://git.DOMAIN --token TOKEN
 ```
 
 **Ersteinrichtung gog:**
 ```bash
-ssh -t mario@10.100.0.1 gog login
+ssh -t user@10.100.0.1 gog login
 ```
 
 Details: [docs/SERVICES.md](docs/SERVICES.md)

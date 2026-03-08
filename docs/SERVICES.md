@@ -51,10 +51,17 @@
 
 | Service | Container | Access | Enable Variable |
 |---------|-----------|--------|-----------------|
-| Gitea | `gitea` | Traefik → `https://gitea.DOMAIN` | `enable_gitea = true` || tea CLI | `gitea-tea` | SSH → `tea <command>` | (included with Gitea) || n8n | `n8n` | Traefik → `https://n8n.DOMAIN` | `enable_n8n = true` |
+| Gitea | `gitea` | Traefik → `https://git.DOMAIN` | `enable_gitea = true` |
+| tea CLI | `gitea-tea` | SSH → `tea <command>` | (included with Gitea) |
+| psql-gitea | `gitea-postgres` | SSH → `psql-gitea <query>` | (included with Gitea) |
+| n8n | `n8n` | Traefik → `https://n8n.DOMAIN` | `enable_n8n = true` |
+| n8n CLI | `n8n` | SSH → `n8n <command>` | (included with n8n) |
+| psql-n8n | `n8n-postgres` | SSH → `psql-n8n <query>` | (included with n8n) |
 | whoami | `whoami` | Traefik → `https://whoami.DOMAIN` | `enable_whoami = true` |
 | gogcli | `gogcli` | SSH → `gog <command>` | `enable_gogcli = true` |
-| MkDocs | `mkdocs-nginx` + `mkdocs-webhook` | Traefik → `https://docs.DOMAIN` | `enable_mkdocs = true` || Uptime Kuma | `kuma` | Traefik → `https://status.DOMAIN` | `enable_kuma = true` |
+| MkDocs | `mkdocs-nginx` + `mkdocs-webhook` | Traefik → `https://docs.DOMAIN` | `enable_mkdocs = true` |
+| Uptime Kuma | `kuma` | Traefik → `https://status.DOMAIN` | `enable_kuma = true` |
+
 ---
 
 ## Gitea
@@ -130,6 +137,29 @@ tea login add --name gitea --url https://git.YOUR_DOMAIN --token <your-token>
 | Config | `/opt/gitea/tea-config/` |
 | Ports | **keine** (nur docker exec) |
 
+### psql-gitea (PostgreSQL CLI)
+
+Direct access to the Gitea PostgreSQL database.
+
+**Usage:**
+
+```bash
+# Via wrapper (after deploy)
+ssh user@10.100.0.1
+psql-gitea -c "SELECT id, name FROM repository LIMIT 5;"
+psql-gitea  # Interactive session
+
+# Direct docker exec
+docker exec -it gitea-postgres psql -U gitea -d gitea
+```
+
+| Property | Value |
+|----------|-------|
+| Container | `gitea-postgres` |
+| Image | `postgres:16-alpine` |
+| Network | `vpn_net` (10.20.0.31) |
+| Ports | **keine** (nur docker exec) |
+
 ---
 
 ## n8n
@@ -152,6 +182,63 @@ n8n_version = "latest"  # Optional, default: latest
 ### Security Note
 
 n8n is exposed to the internet. Consider restricting access via additional Traefik middleware if needed.
+
+### n8n CLI
+
+The n8n container includes a built-in CLI for workflow management.
+
+> ⚠️ **Access:** VPN + SSH only.
+
+```
+┌──────────┐     VPN      ┌────────────┐     SSH      ┌─────────────┐
+│  Client  │ ──────────── │  10.100.0.1│ ──────────── │   Docker    │
+│ (lokal)  │   WireGuard  │   Server   │  user        │     n8n     │
+└──────────┘              └────────────┘              └─────────────┘
+```
+
+**Usage:**
+
+```bash
+# Via wrapper (after deploy)
+ssh user@10.100.0.1
+n8n export:workflow --all --output=/data/backup/
+n8n import:workflow --input=/data/workflow.json
+n8n export:credentials --all --output=/data/backup/
+n8n --help
+
+# Direct docker exec
+docker exec -it n8n n8n export:workflow --all
+```
+
+| Property | Value |
+|----------|-------|
+| Container | `n8n` |
+| Image | `n8nio/n8n:latest` |
+| Network | `vpn_net` (10.20.0.40) |
+| Ports | **keine** (nur docker exec) |
+
+### psql-n8n (PostgreSQL CLI)
+
+Direct access to the n8n PostgreSQL database.
+
+**Usage:**
+
+```bash
+# Via wrapper (after deploy)
+ssh user@10.100.0.1
+psql-n8n -c "SELECT id, name, active FROM workflow_entity LIMIT 5;"
+psql-n8n  # Interactive session
+
+# Direct docker exec
+docker exec -it n8n-postgres psql -U n8n -d n8n
+```
+
+| Property | Value |
+|----------|-------|
+| Container | `n8n-postgres` |
+| Image | `postgres:16-alpine` |
+| Network | `vpn_net` (10.20.0.41) |
+| Ports | **keine** (nur docker exec) |
 
 ---
 

@@ -39,7 +39,8 @@ output "credentials" {
       db_password    = random_password.gitea_db[0].result
       secret_key     = random_password.gitea_secret[0].result
       internal_token = random_password.gitea_internal_token[0].result
-      tea_cli        = "ssh ${var.admin_user}@${local.vpn_server_ip} 'tea <command>'"
+      tea_cli        = "ssh user@${local.vpn_server_ip} 'tea <command>'"
+      psql_cli       = "ssh user@${local.vpn_server_ip} 'psql-gitea <query>'"
     } : null
 
     n8n = var.enable_n8n ? {
@@ -48,6 +49,8 @@ output "credentials" {
       admin_password = var.n8n_admin_password != "" ? var.n8n_admin_password : random_password.n8n_admin_password[0].result
       db_password    = random_password.n8n_db[0].result
       encryption_key = random_password.n8n_encryption[0].result
+      n8n_cli        = "ssh user@${local.vpn_server_ip} 'n8n <command>'"
+      psql_cli       = "ssh user@${local.vpn_server_ip} 'psql-n8n <query>'"
     } : null
 
     gogcli = var.enable_gogcli ? {
@@ -76,13 +79,19 @@ output "credentials" {
 output "services" {
   description = "Installed services (only accessible via VPN)"
   value = {
-    gitea   = var.enable_gitea ? "https://git.${var.domain}" : null
-    tea_cli = var.enable_gitea ? "ssh ${var.admin_user}@${local.vpn_server_ip} tea <command>" : null
-    n8n     = var.enable_n8n ? "https://n8n.${var.domain}" : null
-    whoami  = var.enable_whoami ? "https://whoami.${var.domain}" : null
-    gogcli  = var.enable_gogcli ? "ssh ${var.admin_user}@${local.vpn_server_ip} gog <command>" : null
-    mkdocs  = var.enable_mkdocs ? "https://docs.${var.domain}" : null
-    kuma    = var.enable_kuma ? "https://status.${var.domain}" : null
+    # Web services (Traefik)
+    gitea  = var.enable_gitea ? "https://git.${var.domain}" : null
+    n8n    = var.enable_n8n ? "https://n8n.${var.domain}" : null
+    whoami = var.enable_whoami ? "https://whoami.${var.domain}" : null
+    mkdocs = var.enable_mkdocs ? "https://docs.${var.domain}" : null
+    kuma   = var.enable_kuma ? "https://status.${var.domain}" : null
+
+    # CLI tools (SSH + docker exec)
+    tea_cli        = var.enable_gitea ? "ssh user@${local.vpn_server_ip} tea <command>" : null
+    psql_gitea_cli = var.enable_gitea ? "ssh user@${local.vpn_server_ip} psql-gitea <query>" : null
+    n8n_cli        = var.enable_n8n ? "ssh user@${local.vpn_server_ip} n8n <command>" : null
+    psql_n8n_cli   = var.enable_n8n ? "ssh user@${local.vpn_server_ip} psql-n8n <query>" : null
+    gogcli         = var.enable_gogcli ? "ssh user@${local.vpn_server_ip} gog <command>" : null
   }
 }
 

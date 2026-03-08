@@ -556,6 +556,29 @@ EOF
   log_info "Created /usr/local/bin/tea wrapper"
 }
 
+# ── Create psql-gitea wrapper ────────────────────────────────────────────────
+setup_psql_gitea() {
+  log_step "Setting up psql-gitea wrapper"
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    log_info "Would create /usr/local/bin/psql-gitea wrapper"
+    return 0
+  fi
+
+  cat > /usr/local/bin/psql-gitea <<'EOF'
+#!/bin/bash
+# Wrapper for Gitea PostgreSQL CLI in Docker
+if [ -t 0 ] && [ -t 1 ]; then
+  exec docker exec -it gitea-postgres psql -U gitea -d gitea "$@"
+else
+  exec docker exec gitea-postgres psql -U gitea -d gitea "$@"
+fi
+EOF
+  chmod +x /usr/local/bin/psql-gitea
+
+  log_info "Created /usr/local/bin/psql-gitea wrapper"
+}
+
 # ── Main ─────────────────────────────────────────────────────────────────────
 main() {
   module_start "$BOOTSTRAP_MODULE"
@@ -569,6 +592,7 @@ main() {
   ensure_webhook_settings
   create_admin_user
   setup_tea_alias
+  setup_psql_gitea
   configure_tea
 
   module_done

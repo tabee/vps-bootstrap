@@ -511,6 +511,52 @@ PY
   log_info "✅ OpenAI credential configured in n8n"
 }
 
+# ── Create n8n CLI wrapper ───────────────────────────────────────────────────
+setup_n8n_cli() {
+  log_step "Setting up n8n CLI wrapper"
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    log_info "Would create /usr/local/bin/n8n wrapper"
+    return 0
+  fi
+
+  cat > /usr/local/bin/n8n <<'EOF'
+#!/bin/bash
+# Wrapper for n8n CLI in Docker
+if [ -t 0 ] && [ -t 1 ]; then
+  exec docker exec -it n8n n8n "$@"
+else
+  exec docker exec n8n n8n "$@"
+fi
+EOF
+  chmod +x /usr/local/bin/n8n
+
+  log_info "Created /usr/local/bin/n8n wrapper"
+}
+
+# ── Create psql-n8n wrapper ──────────────────────────────────────────────────
+setup_psql_n8n() {
+  log_step "Setting up psql-n8n wrapper"
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    log_info "Would create /usr/local/bin/psql-n8n wrapper"
+    return 0
+  fi
+
+  cat > /usr/local/bin/psql-n8n <<'EOF'
+#!/bin/bash
+# Wrapper for n8n PostgreSQL CLI in Docker
+if [ -t 0 ] && [ -t 1 ]; then
+  exec docker exec -it n8n-postgres psql -U n8n -d n8n "$@"
+else
+  exec docker exec n8n-postgres psql -U n8n -d n8n "$@"
+fi
+EOF
+  chmod +x /usr/local/bin/psql-n8n
+
+  log_info "Created /usr/local/bin/psql-n8n wrapper"
+}
+
 # ── Main ─────────────────────────────────────────────────────────────────────
 main() {
   module_start "$BOOTSTRAP_MODULE"
@@ -523,6 +569,8 @@ main() {
   deploy_n8n
   create_owner_user
   create_openai_credential
+  setup_n8n_cli
+  setup_psql_n8n
 
   module_done
 }
