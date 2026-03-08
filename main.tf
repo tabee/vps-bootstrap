@@ -269,6 +269,8 @@ resource "null_resource" "sync_bootstrap_files" {
     gogcli_service_hash = filesha256("${path.module}/bootstrap/services/gogcli.sh")
     mkdocs_service_hash = filesha256("${path.module}/bootstrap/services/mkdocs.sh")
     mkdocs_webhook_hash = filesha256("${path.module}/bootstrap/services/mkdocs-webhook.py")
+    n8n_service_hash    = filesha256("${path.module}/bootstrap/services/n8n.sh")
+    gitea_service_hash  = filesha256("${path.module}/bootstrap/services/gitea.sh")
   }
 
   connection {
@@ -300,6 +302,16 @@ resource "null_resource" "sync_bootstrap_files" {
     destination = "/tmp/mkdocs-webhook.py"
   }
 
+  provisioner "file" {
+    source      = "${path.module}/bootstrap/services/n8n.sh"
+    destination = "/tmp/n8n.sh"
+  }
+
+  provisioner "file" {
+    source      = "${path.module}/bootstrap/services/gitea.sh"
+    destination = "/tmp/gitea.sh"
+  }
+
   provisioner "remote-exec" {
     inline = [
       "set -e",
@@ -307,7 +319,9 @@ resource "null_resource" "sync_bootstrap_files" {
       "sudo install -m 0755 /tmp/gogcli.sh ${var.repo_path}/bootstrap/services/gogcli.sh",
       "sudo install -m 0755 /tmp/mkdocs.sh ${var.repo_path}/bootstrap/services/mkdocs.sh",
       "sudo install -m 0755 /tmp/mkdocs-webhook.py ${var.repo_path}/bootstrap/services/mkdocs-webhook.py",
-      "rm -f /tmp/04-docker.sh /tmp/gogcli.sh /tmp/mkdocs.sh /tmp/mkdocs-webhook.py",
+      "sudo install -m 0755 /tmp/n8n.sh ${var.repo_path}/bootstrap/services/n8n.sh",
+      "sudo install -m 0755 /tmp/gitea.sh ${var.repo_path}/bootstrap/services/gitea.sh",
+      "rm -f /tmp/04-docker.sh /tmp/gogcli.sh /tmp/mkdocs.sh /tmp/mkdocs-webhook.py /tmp/n8n.sh /tmp/gitea.sh",
     ]
   }
 }
