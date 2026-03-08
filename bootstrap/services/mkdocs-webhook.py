@@ -88,10 +88,11 @@ def rebuild() -> None:
             run_git(["git", "-C", REPO_DIR, "reset", "--hard", f"origin/{BRANCH}"])
         else:
             print(f"[builder] Cloning {BRANCH}...", flush=True)
-            if os.path.exists(REPO_DIR):
-                shutil.rmtree(REPO_DIR)
-            os.makedirs(os.path.dirname(REPO_DIR), exist_ok=True)
-            run_git(["git", "clone", "-b", BRANCH, "--single-branch", auth_url, REPO_DIR])
+            os.makedirs(REPO_DIR, exist_ok=True)
+            run_git(["git", "init", REPO_DIR])
+            run_git(["git", "-C", REPO_DIR, "remote", "add", "origin", auth_url])
+            run_git(["git", "-C", REPO_DIR, "fetch", "origin"])
+            run_git(["git", "-C", REPO_DIR, "reset", "--hard", f"origin/{BRANCH}"])
 
         # Build into a temporary directory outside the mounted site volume.
         # The site volume itself is a Docker mountpoint and cannot be renamed.
