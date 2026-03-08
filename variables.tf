@@ -140,6 +140,13 @@ variable "enable_n8n" {
   default     = false
 }
 
+variable "n8n_openai_api_key" {
+  description = "OpenAI API Key for n8n AI workflows"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 variable "enable_whoami" {
   description = "Install test service? (whoami.domain.com)"
   type        = bool

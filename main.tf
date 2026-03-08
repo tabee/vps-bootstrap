@@ -117,6 +117,7 @@ GITEA_ADMIN_PASSWORD="${var.gitea_admin_password != "" ? var.gitea_admin_passwor
 %{if var.enable_n8n~}
 N8N_DB_PASSWORD="${random_password.n8n_db[0].result}"
 N8N_ENCRYPTION_KEY="${random_password.n8n_encryption[0].result}"
+OPENAI_API_KEY="${var.n8n_openai_api_key}"
 %{endif~}
 %{if var.enable_gogcli~}
 GOOGLE_CLIENT_ID="${var.google_client_id}"
@@ -133,11 +134,11 @@ EOT
 
   # Always skip hardening in apply.sh - Terraform runs it after VPN clients exist
   bootstrap_command = "sudo bash ${var.repo_path}/bootstrap/apply.sh --skip-harden"
-  
+
   # Use SSH-Agent when no explicit key is provided
   use_ssh_agent   = var.ssh_private_key == "" && var.ssh_private_key_path == ""
   ssh_private_key = local.use_ssh_agent ? null : (var.ssh_private_key != "" ? var.ssh_private_key : file(var.ssh_private_key_path))
-  
+
   # Connection settings: VPN after hardening, public IP for initial setup
   effective_ssh_host = var.use_vpn ? local.vpn_server_ip : var.ssh_host
   effective_ssh_user = var.use_vpn ? var.admin_user : var.ssh_user
@@ -149,7 +150,7 @@ EOT
 
 resource "null_resource" "clone_repo" {
   triggers = {
-    git_ref = var.git_ref
+    always_run = timestamp()
   }
 
   connection {
@@ -165,8 +166,7 @@ resource "null_resource" "clone_repo" {
     inline = [
       "set -e",
       "sudo apt-get update -qq && sudo apt-get install -y -qq git",
-      "sudo rm -rf ${var.repo_path}",
-      "sudo git clone --branch ${var.git_ref} ${var.git_repo_url} ${var.repo_path}",
+      "if [ -d ${var.repo_path}/.git ]; then sudo git -C ${var.repo_path} fetch origin && sudo git -C ${var.repo_path} checkout ${var.git_ref} && sudo git -C ${var.repo_path} pull origin ${var.git_ref}; else sudo rm -rf ${var.repo_path} && sudo git clone --branch ${var.git_ref} ${var.git_repo_url} ${var.repo_path}; fi",
     ]
   }
 }
@@ -179,8 +179,8 @@ resource "null_resource" "deploy_env" {
   depends_on = [null_resource.clone_repo]
 
   triggers = {
-    env_hash   = sha256(local.env_content)
-    clone_id   = null_resource.clone_repo.id  # Re-deploy when repo is re-cloned
+    env_hash = sha256(local.env_content)
+    clone_id = null_resource.clone_repo.id # Re-deploy when repo is re-cloned
   }
 
   connection {
@@ -214,6 +214,7 @@ resource "null_resource" "bootstrap" {
 
   triggers = {
     env_hash   = sha256(local.env_content)
+    clone_id   = null_resource.clone_repo.id
     always_run = var.force_rerun ? timestamp() : "stable"
   }
 

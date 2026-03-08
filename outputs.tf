@@ -11,13 +11,13 @@ output "access" {
   sensitive   = true
   value = {
     ssh = {
-      hint       = "After hardening only accessible via VPN!"
-      command    = "ssh ${var.admin_user}@${local.vpn_server_ip}"
-      vpn_ip     = local.vpn_server_ip
-      sudo       = "sudo -i (passwordless)"
+      hint    = "After hardening only accessible via VPN!"
+      command = "ssh ${var.admin_user}@${local.vpn_server_ip}"
+      vpn_ip  = local.vpn_server_ip
+      sudo    = "sudo -i (passwordless)"
     }
     vpn = {
-      clients = var.vpn_clients
+      clients    = var.vpn_clients
       config_cmd = "ssh root@${var.ssh_host} 'cat /etc/wireguard/clients/admin/client.conf'"
       qr_cmd     = "ssh root@${var.ssh_host} 'cat /etc/wireguard/clients/admin/qr.txt'"
     }
@@ -49,15 +49,15 @@ output "credentials" {
     } : null
 
     gogcli = var.enable_gogcli ? {
-      access   = "ssh ${var.admin_user}@${local.vpn_server_ip} 'gog <command>'"
-      config   = "/opt/gogcli"
-      note     = "Requires Google OAuth setup - see README"
+      access = "ssh ${var.admin_user}@${local.vpn_server_ip} 'gog <command>'"
+      config = "/opt/gogcli"
+      note   = "Requires Google OAuth setup - see README"
     } : null
 
     mkdocs = var.enable_mkdocs ? {
-      url             = "https://docs.${var.domain}"
-      repo            = "https://git.${var.domain}/${var.gitea_admin_user}/docs"
-      webhook_secret  = var.mkdocs_webhook_secret != "" ? var.mkdocs_webhook_secret : random_password.mkdocs_webhook_secret[0].result
+      url            = "https://docs.${var.domain}"
+      repo           = "https://git.${var.domain}/${var.gitea_admin_user}/docs"
+      webhook_secret = var.mkdocs_webhook_secret != "" ? var.mkdocs_webhook_secret : random_password.mkdocs_webhook_secret[0].result
     } : null
   }
 }
