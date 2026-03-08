@@ -74,7 +74,7 @@ resource "random_password" "n8n_encryption" {
 resource "random_password" "n8n_admin_password" {
   count   = var.enable_n8n && var.n8n_admin_password == "" ? 1 : 0
   length  = 24
-  special = true
+  special = false
 }
 
 resource "random_password" "mkdocs_webhook_secret" {

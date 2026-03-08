@@ -294,7 +294,7 @@ provision_admin_user() {
   log_info "Creating admin user '${KUMA_ADMIN_USER}'..."
 
   # Hash password using bcryptjs in the Kuma container
-  docker exec -e PASSWORD="$KUMA_ADMIN_PASSWORD" -e USERNAME="$KUMA_ADMIN_USER" kuma node -e '
+  if ! docker exec -e PASSWORD="$KUMA_ADMIN_PASSWORD" -e USERNAME="$KUMA_ADMIN_USER" kuma node -e '
 const bcryptjs = require("bcryptjs");
 const hash = bcryptjs.hashSync(process.env.PASSWORD, 10);
 const username = process.env.USERNAME;
@@ -309,6 +309,11 @@ db.exec(`
 db.close();
 console.log("User created: " + username);
 '
+  then
+    log_warn "Kuma admin auto-provisioning skipped (missing runtime dependency in container)."
+    log_warn "Create the admin account on first visit: https://status.${VPN_DOMAIN}"
+    return 0
+  fi
 
   log_info "Admin user '${KUMA_ADMIN_USER}' created successfully"
 }
