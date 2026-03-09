@@ -137,6 +137,8 @@ services:
       # Timezone
       - GENERIC_TIMEZONE=Europe/Zurich
       - TZ=Europe/Zurich
+      # Public API (required for API access)
+      - N8N_PUBLIC_API_DISABLED=false
       # Optional: OpenAI key for workflows
       - OPENAI_API_KEY=${OPENAI_API_KEY}
     security_opt:
