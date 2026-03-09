@@ -157,7 +157,7 @@ set -euo pipefail
 fi
 # Use user-specific tea config
 export XDG_CONFIG_HOME="${HOME}/.config"
-  exec /usr/bin/docker exec -i -e "XDG_CONFIG_HOME=/tmp/tea-$(/usr/bin/id -un)" tea tea "$@"
+  exec /usr/bin/docker exec -i -e "XDG_CONFIG_HOME=/tmp/tea-$(/usr/bin/id -un)" gitea-tea tea "$@"
 EOF
     chmod 755 "${wrapper_dir}/tea-cli"
     log_info "Installed: tea-cli"
@@ -169,8 +169,20 @@ create_restricted_user() {
   local username="$1"
   local ssh_pubkey="$2"
   local groups_str="$3"
+  local effective_groups="$groups_str"
 
-  log_info "Setting up restricted user: ${username} (groups: ${groups_str})"
+  # vpn-cli users need docker socket access for CLI wrappers
+  if echo "$groups_str" | grep -qw vpn-cli; then
+    if getent group docker &>/dev/null; then
+      if ! echo "$groups_str" | grep -qw docker; then
+        effective_groups+=",docker"
+      fi
+    else
+      log_warn "Group 'docker' not found; vpn-cli wrappers may fail for ${username}"
+    fi
+  fi
+
+  log_info "Setting up restricted user: ${username} (groups: ${effective_groups})"
 
   if [[ "$DRY_RUN" == "true" ]]; then
     log_info "Would create user: ${username}"
@@ -186,13 +198,13 @@ create_restricted_user() {
       --create-home \
       --home-dir "$user_home" \
       --shell /bin/rbash \
-      --groups "$groups_str" \
+      --groups "$effective_groups" \
       --comment "Restricted VPN user (managed by Terraform)" \
       "$username"
     log_info "Created user: ${username}"
   else
     # Update groups for existing user (replace all supplementary groups)
-    usermod --groups "$groups_str" "$username"
+    usermod --groups "$effective_groups" "$username"
     # Ensure shell is rbash
     usermod --shell /bin/rbash "$username"
     log_info "Updated existing user: ${username}"
