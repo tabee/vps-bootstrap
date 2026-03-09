@@ -32,6 +32,35 @@ if [[ -f "${SCRIPT_DIR}/.env" ]]; then
 fi
 
 ADMIN_USER="${ADMIN_USER:-admin}"
+SSH_ALLOW_USERS="${ADMIN_USER}"
+
+# ── Build SSH allow-list (admin + vpn-cli additional users) ───────────────
+build_ssh_allow_users() {
+  local allow_users="${ADMIN_USER}"
+  local users_json="${ADDITIONAL_USERS:-[]}"
+
+  if ! command -v jq &>/dev/null; then
+    log_warn "jq not installed - SSH AllowUsers will include only admin user"
+    SSH_ALLOW_USERS="${allow_users}"
+    return 0
+  fi
+
+  if [[ -n "$users_json" ]] && [[ "$users_json" != "[]" ]]; then
+    local cli_users
+    cli_users="$(echo "$users_json" | jq -r '.[] | select((.groups // []) | index("vpn-cli")) | .username' 2>/dev/null || true)"
+
+    if [[ -n "$cli_users" ]]; then
+      while IFS= read -r username; do
+        [[ -z "$username" ]] && continue
+        [[ "$username" == "$ADMIN_USER" ]] && continue
+        allow_users+=" ${username}"
+      done <<< "$cli_users"
+    fi
+  fi
+
+  SSH_ALLOW_USERS="$allow_users"
+  log_info "SSH AllowUsers resolved to: ${SSH_ALLOW_USERS}"
+}
 
 # ── Verify prerequisites ────────────────────────────────────────────────────
 verify_prerequisites() {
@@ -82,8 +111,8 @@ PasswordAuthentication no
 PubkeyAuthentication yes
 AuthenticationMethods publickey
 
-# ── ACCESS CONTROL: Only admin user ─────────────────────────────────────────
-AllowUsers ${ADMIN_USER}
+# ── ACCESS CONTROL: Admin + vpn-cli users ───────────────────────────────────
+AllowUsers ${SSH_ALLOW_USERS}
 
 # ── SECURITY: Minimize attack surface ───────────────────────────────────────
 X11Forwarding no
@@ -245,6 +274,7 @@ main() {
   require_root
   
   verify_prerequisites
+  build_ssh_allow_users
   harden_ssh
   configure_sudo
   harden_fail2ban
