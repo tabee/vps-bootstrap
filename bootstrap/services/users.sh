@@ -89,11 +89,11 @@ install_cli_wrappers() {
 #!/bin/bash
 # GOG CLI wrapper — requires vpn-cli group
 set -euo pipefail
-if ! groups 2>/dev/null | grep -qw vpn-cli; then
+if [[ " $(/usr/bin/id -nG) " != *" vpn-cli "* ]]; then
     echo "Error: vpn-cli group membership required" >&2
     exit 1
 fi
-exec docker exec -i gogcli gog "$@"
+exec /usr/bin/docker exec -i gogcli gog "$@"
 EOF
     chmod 755 "${wrapper_dir}/gog-cli"
     log_info "Installed: gog-cli"
@@ -105,11 +105,11 @@ EOF
 #!/bin/bash
 # n8n CLI wrapper — requires vpn-cli group
 set -euo pipefail
-if ! groups 2>/dev/null | grep -qw vpn-cli; then
+if [[ " $(/usr/bin/id -nG) " != *" vpn-cli "* ]]; then
     echo "Error: vpn-cli group membership required" >&2
     exit 1
 fi
-exec docker exec -i n8n n8n "$@"
+exec /usr/bin/docker exec -i n8n n8n "$@"
 EOF
     chmod 755 "${wrapper_dir}/n8n-cli"
     log_info "Installed: n8n-cli"
@@ -119,11 +119,11 @@ EOF
 #!/bin/bash
 # PostgreSQL (n8n) CLI wrapper — requires vpn-cli group
 set -euo pipefail
-if ! groups 2>/dev/null | grep -qw vpn-cli; then
+  if [[ " $(/usr/bin/id -nG) " != *" vpn-cli "* ]]; then
     echo "Error: vpn-cli group membership required" >&2
     exit 1
 fi
-exec docker exec -i n8n-postgres psql -U n8n -d n8n "$@"
+  exec /usr/bin/docker exec -i n8n-postgres psql -U n8n -d n8n "$@"
 EOF
     chmod 755 "${wrapper_dir}/psql-n8n-cli"
     log_info "Installed: psql-n8n-cli"
@@ -136,11 +136,11 @@ EOF
 #!/bin/bash
 # PostgreSQL (Gitea) CLI wrapper — requires vpn-cli group
 set -euo pipefail
-if ! groups 2>/dev/null | grep -qw vpn-cli; then
+  if [[ " $(/usr/bin/id -nG) " != *" vpn-cli "* ]]; then
     echo "Error: vpn-cli group membership required" >&2
     exit 1
 fi
-exec docker exec -i gitea-postgres psql -U gitea -d gitea "$@"
+  exec /usr/bin/docker exec -i gitea-postgres psql -U gitea -d gitea "$@"
 EOF
     chmod 755 "${wrapper_dir}/psql-gitea-cli"
     log_info "Installed: psql-gitea-cli"
@@ -151,13 +151,13 @@ EOF
 # tea (Gitea CLI) wrapper — requires vpn-cli group
 # First run: tea login add --url https://git.DOMAIN --token YOUR_TOKEN --name default
 set -euo pipefail
-if ! groups 2>/dev/null | grep -qw vpn-cli; then
+  if [[ " $(/usr/bin/id -nG) " != *" vpn-cli "* ]]; then
     echo "Error: vpn-cli group membership required" >&2
     exit 1
 fi
 # Use user-specific tea config
 export XDG_CONFIG_HOME="${HOME}/.config"
-exec docker exec -i -e "XDG_CONFIG_HOME=/tmp/tea-$(id -un)" tea tea "$@"
+  exec /usr/bin/docker exec -i -e "XDG_CONFIG_HOME=/tmp/tea-$(/usr/bin/id -un)" tea tea "$@"
 EOF
     chmod 755 "${wrapper_dir}/tea-cli"
     log_info "Installed: tea-cli"
