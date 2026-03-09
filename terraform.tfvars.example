@@ -94,7 +94,7 @@ vpn_clients = ["admin", "laptop", "phone"]
 # OPTIONAL - Additional Restricted Users
 # ═══════════════════════════════════════════════════════════════════════════
 # Users with limited access. Groups:
-#   - vpn-cli: SSH access to CLI wrappers (gog, n8n, tea, psql-*)
+#   - vpn-cli: SSH access to CLI wrappers (gog, n8n, tea, psql-*) with normal bash shell
 #   - vpn-web: WireGuard VPN peer for web UI access via Traefik
 #
 # SSH keys are auto-generated if not provided.

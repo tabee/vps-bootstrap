@@ -164,15 +164,19 @@ EOF
   fi
 }
 
-# ── Create restricted user ───────────────────────────────────────────────────
-create_restricted_user() {
+# ── Create managed user (vpn-cli => standard shell) ─────────────────────────
+create_managed_user() {
   local username="$1"
   local ssh_pubkey="$2"
   local groups_str="$3"
   local effective_groups="$groups_str"
+  local shell_mode="restricted"
+  local user_shell="/bin/rbash"
 
   # vpn-cli users need docker socket access for CLI wrappers
   if echo "$groups_str" | grep -qw vpn-cli; then
+    shell_mode="standard"
+    user_shell="/bin/bash"
     if getent group docker &>/dev/null; then
       if ! echo "$groups_str" | grep -qw docker; then
         effective_groups+=",docker"
@@ -182,7 +186,7 @@ create_restricted_user() {
     fi
   fi
 
-  log_info "Setting up restricted user: ${username} (groups: ${effective_groups})"
+  log_info "Setting up user: ${username} (groups: ${effective_groups}, shell: ${shell_mode})"
 
   if [[ "$DRY_RUN" == "true" ]]; then
     log_info "Would create user: ${username}"
@@ -197,7 +201,7 @@ create_restricted_user() {
     useradd \
       --create-home \
       --home-dir "$user_home" \
-      --shell /bin/rbash \
+      --shell "$user_shell" \
       --groups "$effective_groups" \
       --comment "Restricted VPN user (managed by Terraform)" \
       "$username"
@@ -205,14 +209,18 @@ create_restricted_user() {
   else
     # Update groups for existing user (replace all supplementary groups)
     usermod --groups "$effective_groups" "$username"
-    # Ensure shell is rbash
-    usermod --shell /bin/rbash "$username"
+    # Ensure configured shell
+    usermod --shell "$user_shell" "$username"
     log_info "Updated existing user: ${username}"
   fi
 
-  # Setup restricted bin directory (owned by root so user cannot modify)
+  # Setup bin directory (root-owned for restricted shell users)
   mkdir -p "$user_bin"
-  chown root:root "$user_bin"
+  if [[ "$shell_mode" == "restricted" ]]; then
+    chown root:root "$user_bin"
+  else
+    chown "${username}:${username}" "$user_bin"
+  fi
   chmod 755 "$user_bin"
 
   # Setup SSH authorized_keys
@@ -224,8 +232,9 @@ create_restricted_user() {
   chmod 600 "${ssh_dir}/authorized_keys"
   chown -R "${username}:${username}" "$ssh_dir"
 
-  # Create restricted .bashrc (owned by root)
-  cat > "${user_home}/.bashrc" << 'BASHRC'
+  if [[ "$shell_mode" == "restricted" ]]; then
+    # Create restricted .bashrc (owned by root)
+    cat > "${user_home}/.bashrc" << 'BASHRC'
 # Restricted bash configuration — DO NOT MODIFY
 # This file is managed by Terraform
 
@@ -246,21 +255,39 @@ ls ~/bin 2>/dev/null | column 2>/dev/null || ls ~/bin 2>/dev/null || echo "(none
 echo ""
 BASHRC
 
-  # Create .profile that sources .bashrc
-  cat > "${user_home}/.profile" << 'PROFILE'
+    # Create .profile that sources .bashrc
+    cat > "${user_home}/.profile" << 'PROFILE'
 # Restricted profile — DO NOT MODIFY
 if [ -f "${HOME}/.bashrc" ]; then
     . "${HOME}/.bashrc"
 fi
 PROFILE
 
-  # Lock down home directory files
-  chown root:root "${user_home}/.bashrc" "${user_home}/.profile"
-  chmod 644 "${user_home}/.bashrc" "${user_home}/.profile"
+    # Lock down restricted shell config files
+    chown root:root "${user_home}/.bashrc" "${user_home}/.profile"
+    chmod 644 "${user_home}/.bashrc" "${user_home}/.profile"
+    log_info "Configured restricted environment for: ${username}"
+  else
+    # Standard shell: allow normal PATH and shell behavior
+    cat > "${user_home}/.bashrc" << 'BASHRC'
+# Standard shell configuration (managed by Terraform)
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${HOME}/bin"
+BASHRC
+
+    cat > "${user_home}/.profile" << 'PROFILE'
+# Standard profile (managed by Terraform)
+if [ -f "${HOME}/.bashrc" ]; then
+    . "${HOME}/.bashrc"
+fi
+PROFILE
+
+    chown "${username}:${username}" "${user_home}/.bashrc" "${user_home}/.profile"
+    chmod 644 "${user_home}/.bashrc" "${user_home}/.profile"
+    log_info "Configured standard shell environment for: ${username}"
+  fi
+
   chown "${username}:${username}" "$user_home"
   chmod 750 "$user_home"
-
-  log_info "Configured restricted environment for: ${username}"
 }
 
 # ── Setup user's available commands ──────────────────────────────────────────
@@ -269,8 +296,18 @@ setup_user_commands() {
   local groups_str="$2"
   local user_bin="/home/${username}/bin"
 
+  local shell_mode="restricted"
+  if echo "$groups_str" | grep -qw vpn-cli; then
+    shell_mode="standard"
+  fi
+
   if [[ "$DRY_RUN" == "true" ]]; then
     log_info "Would setup commands for: ${username}"
+    return 0
+  fi
+
+  # Only restricted shell users need command whitelist symlinks
+  if [[ "$shell_mode" != "restricted" ]]; then
     return 0
   fi
 
@@ -532,7 +569,7 @@ sync_users() {
     groups_array=$(echo "$user" | jq -r '.groups | join(",")')
     groups_str="$groups_array"
 
-    create_restricted_user "$username" "$ssh_pubkey" "$groups_str"
+    create_managed_user "$username" "$ssh_pubkey" "$groups_str"
     setup_user_commands "$username" "$groups_str"
 
     # Handle WireGuard peer based on vpn-web membership

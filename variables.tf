@@ -291,7 +291,7 @@ variable "hostname" {
 # ═══════════════════════════════════════════════════════════════════════════
 # Users with limited access via CLI (SSH) and/or Web (WireGuard VPN).
 # Groups:
-#   - vpn-cli: SSH access to CLI wrappers (gog, n8n, tea, psql-*)
+#   - vpn-cli: SSH access to CLI wrappers (gog, n8n, tea, psql-*) with standard bash shell
 #   - vpn-web: WireGuard VPN peer for web UI access via Traefik
 #
 # Keys are auto-generated if not provided.
@@ -330,6 +330,7 @@ variable "additional_users" {
     ])
     error_message = "Username cannot be a reserved system name."
   }
+
 }
 
 # ═══════════════════════════════════════════════════════════════════════════

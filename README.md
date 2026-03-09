@@ -167,6 +167,41 @@ Store securely (password manager).
 
 Nach VPN-Verbindung via SSH erreichbar. **Kein sudo erforderlich.**
 
+Wichtig: `tea`, `n8n`, `gog`, `psql-*` sind **Host-Wrapper**. Sie rufen intern `docker exec` auf die jeweiligen Container auf.
+Du brauchst auf deinem lokalen Rechner also kein installiertes `tea`/`n8n`.
+
+### Zugriff vom Host (One-Shot)
+
+```bash
+# Vom lokalen Rechner (mit aktivem WireGuard):
+ssh developer@10.100.0.1 'tea --help'
+ssh developer@10.100.0.1 'n8n list:workflow --help'
+ssh developer@10.100.0.1 'gog version'
+```
+
+### Interaktiv auf dem VPS
+
+```bash
+ssh developer@10.100.0.1
+tea --help
+n8n --help
+```
+
+Hinweis: User mit Gruppe `vpn-cli` bekommen automatisch eine normale Bash-Shell (`/bin/bash`) für CLI-Nutzung, Datei-Transfer (scp/sftp) und Write-Workflows.
+User ohne `vpn-cli` (z. B. nur `vpn-web`) bleiben in der restricted Shell (`rbash`).
+
+Wenn der Zugriff von einem zweiten VPS/Jumphost fehlschlägt (`Permission denied (publickey)`),
+prüfe dort den verwendeten `IdentityFile` und die Key-Rechte:
+
+```bash
+chmod 700 ~/.ssh
+chmod 600 ~/.ssh/<private_key>
+ssh -G 10.100.0.1 | grep -E 'user|identityfile|identitiesonly'
+```
+
+Der Public Key auf dem Jumphost muss zum in Terraform hinterlegten `additional_users[].ssh_pubkey`
+passen (oder zum auto-generierten Key aus `terraform output -json additional_users`).
+
 | Dienst | Befehl |
 |--------|--------|
 | Gitea CLI | `ssh user@10.100.0.1 tea <cmd>` |

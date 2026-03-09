@@ -619,8 +619,11 @@ additional_users = [
 
 | Group | Access | Use Case |
 |-------|--------|----------|
-| `vpn-cli` | SSH with restricted shell, CLI wrappers | Automation, API access, DB queries |
+| `vpn-cli` | SSH with normal bash shell, CLI wrappers | Automation, API access, DB queries, file transfer |
 | `vpn-web` | WireGuard VPN peer, Traefik web access | Browser access to web UIs |
+
+Users in `vpn-cli` automatically get a normal shell (`/bin/bash`) for CLI, file transfer, and write workflows.
+Users without `vpn-cli` keep restricted shell behavior.
 
 ### Available CLI Commands (vpn-cli)
 
