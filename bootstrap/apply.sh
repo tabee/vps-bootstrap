@@ -107,6 +107,7 @@ ENABLE_WHOAMI="${ENABLE_WHOAMI:-true}"
 ENABLE_GOGCLI="${ENABLE_GOGCLI:-false}"
 ENABLE_MKDOCS="${ENABLE_MKDOCS:-false}"
 ENABLE_KUMA="${ENABLE_KUMA:-false}"
+ENABLE_PIHOLE="${ENABLE_PIHOLE:-false}"
 ADMIN_USER="${ADMIN_USER:-admin}"
 
 # ── Lock-file to prevent concurrent execution ───────────────────────────────
@@ -209,6 +210,7 @@ main() {
   [[ "$ENABLE_GOGCLI" == "true" ]] && run_service_module "gogcli"
   [[ "$ENABLE_MKDOCS" == "true" ]] && run_service_module "mkdocs"
   [[ "$ENABLE_KUMA" == "true" ]] && run_service_module "kuma"
+  [[ "$ENABLE_PIHOLE" == "true" ]] && run_service_module "pihole"
   
   # Additional restricted users (vpn-cli / vpn-web)
   if [[ -n "${ADDITIONAL_USERS:-}" ]] && [[ "${ADDITIONAL_USERS}" != "[]" ]]; then

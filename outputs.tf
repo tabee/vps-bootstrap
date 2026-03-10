@@ -70,6 +70,13 @@ output "credentials" {
       admin_user     = var.kuma_admin_user
       admin_password = var.kuma_admin_password != "" ? var.kuma_admin_password : random_password.kuma_admin_password[0].result
     } : null
+
+    pihole = var.enable_pihole ? {
+      url            = "https://dns.${var.domain}"
+      dns_ip         = "10.20.0.71"
+      admin_password = var.pihole_admin_password != "" ? var.pihole_admin_password : random_password.pihole_admin_password[0].result
+      note           = "Configure VPN clients to use DNS 10.20.0.71"
+    } : null
   }
 }
 
@@ -109,6 +116,7 @@ output "additional_users" {
         var.enable_n8n ? "https://n8n.${var.domain}" : "",
         var.enable_mkdocs ? "https://docs.${var.domain}" : "",
         var.enable_kuma ? "https://status.${var.domain}" : "",
+        var.enable_pihole ? "https://dns.${var.domain}" : "",
       ]) : []
     }
   }
@@ -127,6 +135,10 @@ output "services" {
     whoami = var.enable_whoami ? "https://whoami.${var.domain}" : null
     mkdocs = var.enable_mkdocs ? "https://docs.${var.domain}" : null
     kuma   = var.enable_kuma ? "https://status.${var.domain}" : null
+    pihole = var.enable_pihole ? "https://dns.${var.domain}" : null
+
+    # DNS (direct access)
+    pihole_dns = var.enable_pihole ? "10.20.0.71:53" : null
 
     # CLI tools (SSH + docker exec)
     tea_cli        = var.enable_gitea ? "ssh user@${local.vpn_server_ip} tea <command>" : null

@@ -75,6 +75,12 @@ enable_kuma = false
 # kuma_admin_user     = "kuma-admin"  # Admin username
 # kuma_admin_password = ""            # Auto-generated if empty
 
+# Pi-hole DNS ad blocker (dns.<domain>)
+# Network-wide ad blocking for VPN clients
+# VPN clients can use 10.20.0.71 as DNS server
+enable_pihole = false
+# pihole_admin_password = ""  # Auto-generated if empty
+
 # Google OAuth credentials (optional - can be added later manually)
 # Get from: https://console.cloud.google.com/apis/credentials
 # Create OAuth 2.0 Client ID → Desktop app

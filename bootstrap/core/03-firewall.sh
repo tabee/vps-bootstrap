@@ -65,6 +65,7 @@ define DKR_IF     = "br-vpn"
 define VPN_NET    = 10.100.0.0/24
 define DKR_NET    = 10.20.0.0/24
 define TRAEFIK_IP = 10.20.0.10
+define PIHOLE_IP  = 10.20.0.71
 
 # =============================================================================
 # inet filter — Layer 3/4 packet filtering (IPv4 + IPv6)
@@ -141,6 +142,13 @@ table inet filter {
     # They CANNOT reach any other container directly.
     # This enforces single-ingress: all traffic flows through Traefik.
     iifname $VPN_IF oifname $DKR_IF ip saddr $VPN_NET ip daddr $TRAEFIK_IP tcp dport { 80, 443, 2222 } accept
+
+    # ── VPN → Pi-hole DNS (optional) ────────────────────────────────────────
+    # Allow VPN clients to use Pi-hole as DNS server (if deployed).
+    # Pi-hole is at 10.20.0.71:53 (UDP/TCP).
+    # This is harmless if Pi-hole is not running.
+    iifname $VPN_IF oifname $DKR_IF ip saddr $VPN_NET ip daddr $PIHOLE_IP udp dport 53 accept
+    iifname $VPN_IF oifname $DKR_IF ip saddr $VPN_NET ip daddr $PIHOLE_IP tcp dport 53 accept
 
     # ── Docker → Internet (outbound) ────────────────────────────────────────
     # Allow containers to reach the internet (for package updates, ACME, etc.)

@@ -61,6 +61,7 @@
 | gogcli | `gogcli` | SSH → `gog <command>` | `enable_gogcli = true` |
 | MkDocs | `mkdocs-nginx` + `mkdocs-webhook` | Traefik → `https://docs.DOMAIN` | `enable_mkdocs = true` |
 | Uptime Kuma | `kuma` | Traefik → `https://status.DOMAIN` | `enable_kuma = true` |
+| Pi-hole | `pihole` | Traefik → `https://dns.DOMAIN`, DNS → `10.20.0.71:53` | `enable_pihole = true` |
 
 ---
 
@@ -555,6 +556,122 @@ The following monitors are auto-provisioned on first install. You can add more m
 - Admin account required (no guest access)
 
 📖 **Vollständige Dokumentation:** [louislam/uptime-kuma](https://github.com/louislam/uptime-kuma)
+
+---
+
+## Pi-hole (DNS Ad Blocker)
+
+Network-wide ad blocking via DNS filtering. All VPN clients can use Pi-hole as their DNS server for ad-free browsing.
+
+### Architecture
+
+```
+  VPN Client                    Traefik                    Pi-hole
+  ─────────── ───────► dns.<domain>:443 ───────────► 10.20.0.71:80
+  (Web Admin)                (websecure)                  (HTTP)
+
+  VPN Client                    Firewall                   Pi-hole
+  ─────────── ───────────────── direct ───────────► 10.20.0.71:53
+  (DNS Queries)             (nftables rule)               (DNS)
+```
+
+Pi-hole provides two access modes:
+- **Web Admin:** Via Traefik at `https://dns.<domain>/admin`
+- **DNS Server:** Direct access from VPN clients at `10.20.0.71:53`
+
+### Configuration
+
+```hcl
+enable_pihole = true
+# pihole_admin_password = ""  # Auto-generated if empty
+```
+
+### Access
+
+- **Web Admin:** `https://dns.YOUR_DOMAIN/admin`
+- **Password:** Auto-generated, retrieve with:
+  ```bash
+  terraform output -json credentials | jq '.pihole'
+  ```
+- **DNS IP:** `10.20.0.71`
+- **Data:** `/opt/pihole/etc-pihole/` (gravity database, settings)
+
+### Using Pi-hole for VPN Clients
+
+To enable ad blocking for your VPN clients, configure them to use Pi-hole as their DNS server:
+
+**WireGuard Configuration:**
+```ini
+[Interface]
+PrivateKey = ...
+Address = 10.100.0.X/32
+DNS = 10.20.0.71  # ← Add this line
+
+[Peer]
+PublicKey = ...
+AllowedIPs = 10.100.0.0/24, 10.20.0.0/24
+Endpoint = YOUR_SERVER:51820
+```
+
+> **Note:** The `AllowedIPs` must include `10.20.0.0/24` for DNS traffic to reach Pi-hole.
+
+### Features
+
+- **DNS-level ad blocking:** Blocks ads, trackers, and malware domains
+- **Web admin interface:** Statistics, query log, blocklist management
+- **Multiple upstream DNS:** Cloudflare (1.1.1.1) + Quad9 (9.9.9.9) by default
+- **Custom blocklists:** Add your own blocklists or whitelist domains
+- **Query logging:** Full visibility into DNS queries
+
+### Container Details
+
+| Property | Value |
+|----------|-------|
+| Container | `pihole` |
+| Image | `pihole/pihole:latest` |
+| Network | `vpn_net` (10.20.0.71) |
+| Internal Ports | 80 (Web), 53 (DNS) |
+| Data | `/opt/pihole/etc-pihole/` |
+| Exposed Ports | **none** (Traefik + firewall rule) |
+
+### Default Upstream DNS
+
+Pi-hole is configured to use these upstream DNS servers:
+
+| Provider | IP | Privacy |
+|----------|-----|---------|
+| Cloudflare | 1.1.1.1 | No logging, fast |
+| Quad9 | 9.9.9.9 | Malware blocking |
+
+You can change this in the Pi-hole web admin under **Settings → DNS**.
+
+### Security
+
+- No published ports — web access via Traefik + VPN only
+- DNS access via firewall rule (VPN clients only)
+- `no-new-privileges` + minimal capabilities
+- Upstream DNS uses encrypted/secure providers
+
+### Troubleshooting
+
+```bash
+# Check Pi-hole status
+docker exec pihole pihole status
+
+# View blocked queries
+docker exec pihole pihole -t  # Tail log
+
+# Update gravity (blocklists)
+docker exec pihole pihole -g
+
+# Test DNS resolution
+docker exec pihole dig +short @127.0.0.1 google.com
+
+# Check if DNS port is responding
+docker exec pihole nc -zv 127.0.0.1 53
+```
+
+📖 **Vollständige Dokumentation:** [pi-hole/pi-hole](https://github.com/pi-hole/pi-hole)
 
 ---
 

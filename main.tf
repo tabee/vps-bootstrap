@@ -89,6 +89,12 @@ resource "random_password" "kuma_admin_password" {
   special = false
 }
 
+resource "random_password" "pihole_admin_password" {
+  count   = var.enable_pihole && var.pihole_admin_password == "" ? 1 : 0
+  length  = 24
+  special = false
+}
+
 # =============================================================================
 # Additional Users - SSH Key Generation
 # =============================================================================
@@ -134,6 +140,7 @@ ENABLE_WHOAMI="${var.enable_whoami}"
 ENABLE_GOGCLI="${var.enable_gogcli}"
 ENABLE_MKDOCS="${var.enable_mkdocs}"
 ENABLE_KUMA="${var.enable_kuma}"
+ENABLE_PIHOLE="${var.enable_pihole}"
 
 # ── Service Secrets ──────────────────────────────────────────────────────────
 %{if var.enable_gitea~}
@@ -162,6 +169,9 @@ MKDOCS_WEBHOOK_SECRET="${var.mkdocs_webhook_secret != "" ? var.mkdocs_webhook_se
 %{if var.enable_kuma~}
 KUMA_ADMIN_USER="${var.kuma_admin_user}"
 KUMA_ADMIN_PASSWORD="${var.kuma_admin_password != "" ? var.kuma_admin_password : random_password.kuma_admin_password[0].result}"
+%{endif~}
+%{if var.enable_pihole~}
+PIHOLE_ADMIN_PASSWORD="${var.pihole_admin_password != "" ? var.pihole_admin_password : random_password.pihole_admin_password[0].result}"
 %{endif~}
 
 # ── VPN Clients ──────────────────────────────────────────────────────────────

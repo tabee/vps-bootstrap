@@ -203,6 +203,19 @@ variable "kuma_admin_password" {
   sensitive   = true
 }
 
+variable "enable_pihole" {
+  description = "Install Pi-hole DNS ad blocker? (dns.<domain>)"
+  type        = bool
+  default     = false
+}
+
+variable "pihole_admin_password" {
+  description = "Pi-hole web admin password (auto-generated if empty)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 variable "mkdocs_webhook_secret" {
   description = "Webhook secret for Gitea → MkDocs rebuild (auto-generated if empty)"
   type        = string
