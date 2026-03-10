@@ -596,6 +596,36 @@ enable_pihole = true
 - **DNS IP:** `10.20.0.71`
 - **Data:** `/opt/pihole/etc-pihole/` (gravity database, settings)
 
+### Initial Setup (After Deployment)
+
+After running `terraform apply`, Pi-hole is ready to use. Optional recommended steps:
+
+1. **Login to Web Admin:**
+   - Go to `https://dns.YOUR_DOMAIN/admin`
+   - Use password from `terraform output -json credentials | jq -r '.pihole.admin_password'`
+
+2. **Review Default Blocklists:**
+   - Settings → Adlists
+   - Default: Steven Black's hosts list
+   - Add more from [firebog.net](https://firebog.net) if desired
+
+3. **Configure Upstream DNS (optional):**
+   - Settings → DNS
+   - Default: Cloudflare (1.1.1.1) + Quad9 (9.9.9.9)
+   - Consider enabling "Use DNSSEC" for additional security
+
+4. **Update Gravity (Blocklists):**
+   ```bash
+   ssh mario@10.100.0.1 'docker exec pihole pihole -g'
+   ```
+
+5. **Test DNS Resolution:**
+   ```bash
+   # From VPN-connected client:
+   dig @10.20.0.71 google.com       # Should resolve
+   dig @10.20.0.71 ads.google.com   # Should be blocked (0.0.0.0)
+   ```
+
 ### Using Pi-hole for VPN Clients
 
 To enable ad blocking for your VPN clients, configure them to use Pi-hole as their DNS server:
@@ -605,7 +635,7 @@ To enable ad blocking for your VPN clients, configure them to use Pi-hole as the
 [Interface]
 PrivateKey = ...
 Address = 10.100.0.X/32
-DNS = 10.20.0.71  # ← Add this line
+DNS = 10.20.0.71  # ← Pi-hole for ad blocking
 
 [Peer]
 PublicKey = ...
@@ -614,6 +644,47 @@ Endpoint = YOUR_SERVER:51820
 ```
 
 > **Note:** The `AllowedIPs` must include `10.20.0.0/24` for DNS traffic to reach Pi-hole.
+
+**Alternative: Use dnsmasq (no ad blocking):**
+```ini
+DNS = 10.100.0.1  # Server's built-in dnsmasq
+```
+
+### Client Configuration by Platform
+
+**macOS / Linux (wg-quick):**
+```bash
+# Edit config file
+sudo nano /etc/wireguard/wg0.conf
+# Change: DNS = 10.20.0.71
+
+# Restart WireGuard
+sudo wg-quick down wg0 && sudo wg-quick up wg0
+```
+
+**iOS / Android (WireGuard App):**
+1. Open WireGuard app
+2. Edit tunnel configuration
+3. Change DNS to `10.20.0.71`
+4. Save and reconnect
+
+**Windows (WireGuard Desktop):**
+1. Right-click tunnel → "Edit"
+2. Change DNS line to `10.20.0.71`
+3. Deactivate and reactivate tunnel
+
+### Verify Pi-hole is Working
+
+```bash
+# Test blocked domain (should return 0.0.0.0 or NXDOMAIN)
+dig @10.20.0.71 ads.google.com +short
+
+# Test normal resolution (should return IP)
+dig @10.20.0.71 google.com +short
+
+# Check Pi-hole dashboard
+# Go to https://dns.YOUR_DOMAIN/admin → Query Log
+```
 
 ### Features
 
