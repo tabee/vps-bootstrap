@@ -73,7 +73,7 @@ install_env_file() {
 
   local env_file="${PIHOLE_DIR}/.env"
 
-  # Pi-hole v6 uses FTLCONF_webserver_api_password for web interface password
+  # Pi-hole v6 uses FTLCONF_* environment variables
   local content
   content="$(cat <<EOF
 # Pi-hole environment
@@ -81,6 +81,10 @@ install_env_file() {
 
 # Web admin password (Pi-hole v6+)
 FTLCONF_webserver_api_password=${PIHOLE_ADMIN_PASSWORD}
+
+# Accept DNS queries from ALL networks (including VPN 10.100.0.0/24)
+# Without this, Pi-hole rejects queries from non-local networks!
+FTLCONF_dns_listeningMode=all
 
 # Timezone
 TZ=Europe/Zurich
@@ -378,6 +382,11 @@ configure_pihole_dns() {
     sleep 2
     i=$((i + 2))
   done
+
+  # CRITICAL: Set listening mode to ALL to accept DNS from VPN clients (10.100.0.0/24)
+  # Without this, Pi-hole rejects queries: "ignoring query from non-local network"
+  log_info "Setting listening mode to ALL (accept DNS from VPN clients)..."
+  docker exec pihole sed -i 's/listeningMode = "LOCAL"/listeningMode = "ALL"/g' /etc/pihole/pihole.toml 2>/dev/null || true
 
   # Update upstream DNS to Cloudflare + Quad9 (faster than Google)
   log_info "Setting upstream DNS to Cloudflare (1.1.1.1) + Quad9 (9.9.9.9)..."
