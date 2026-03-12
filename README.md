@@ -15,7 +15,9 @@ cp terraform.tfvars.example terraform.tfvars
 # Edit terraform.tfvars with your values
 
 # 2. Deploy
-terraform init && terraform apply
+terraform init 
+#terraform apply
+TF_LOG=DEBUG TF_LOG_PATH=terraform-apply-debug.log terraform apply -no-color
 
 # 3. Connect VPN (config shown at end of deploy)
 # 4. Access server
